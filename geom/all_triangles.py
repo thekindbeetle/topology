@@ -20,11 +20,11 @@ class AllTriangles:
         print("Delaunay triangulation was generated.")
         # Получение треугольников триангуляции
         self.triangles = [geom.triang.Triang(idx, tr[idx][0], tr[idx][1], tr[idx][2]) for idx in range(len(tr))]
-        print("Triangles count: {0}".format(self.size()))
+        print("Triangles count: {0}".format(self.count()))
         # Создание пустого массива списков ребер, инцидентных треугольникам
         self.incidEdges = [[] for i in range(len(self.triangles))]
 
-    def size(self):
+    def count(self):
         """
         Количество треугольников в триангуляции в текущий момент.
         (вне зависимости от того, добавлена внешняя грань или нет)
@@ -53,7 +53,7 @@ class AllTriangles:
         idx = 0
 
         # внешность не учитываем
-        for triang_idx in range(self.size()):
+        for triang_idx in range(self.count()):
             tr = self.triangles[triang_idx]
             if not geom.edge.Edge.contains_edge(edges, tr.v(0), tr.v(1)):
                 edges.append(geom.edge.Edge(idx, tr.v(0), tr.v(1)))
@@ -73,7 +73,7 @@ class AllTriangles:
         :param edges: AllEdges instance
         :return:
         """
-        outIdx = self.size()
+        outIdx = self.count()
         out = geom.triang.Out(outIdx, vertices.boardVertices)
         self.triangles.append(out)
         self.incidEdges.append(edges.boardEdges)
@@ -89,7 +89,7 @@ class AllTriangles:
         :return:
         """
         # Пробегаем все треугольники
-        for i in range(self.size()):
+        for i in range(self.count()):
             # Количество ребер, инцидентных вершине A треугольника i.
             iAEdgesCount = vertices.count_of_inc_edges_of_vert(self.a_vert_of_triang(i))
             # Для i-ого треугольника просматриваем список инцедентных ребер вершины A.
@@ -117,7 +117,7 @@ class AllTriangles:
         for tr in self.triangles:
             print(tr)
         print("Incident edges to triangles:")
-        for i in range(self.size()):
+        for i in range(self.count()):
             print("t[{0}]:".format(i))
             for e in self.incidEdges[i]:
                 print(e)

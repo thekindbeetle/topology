@@ -83,7 +83,7 @@ class AllEdges:
         # соответствующих ребрам этого треугольника.
         # Результат: массив, индексы которого - глобальные номера ребер,
         # в i-ой ячейке - список индексов треугольников, инцедентных i-ому ребру.
-        for i in range(triangles.size()):
+        for i in range(triangles.count()):
             self.incidTriangles[triangles.incident_edges_of_triangle(i)[0]].append(i)
             self.incidTriangles[triangles.incident_edges_of_triangle(i)[1]].append(i)
             self.incidTriangles[triangles.incident_edges_of_triangle(i)[2]].append(i)

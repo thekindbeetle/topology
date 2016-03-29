@@ -146,7 +146,7 @@ class Out(Triang):
         :param triangles:
         :return:
         """
-        self.appTime = max([triangles.get_triangle(i).appTime for i in range(triangles.size() - 1)]) + 1 # исключая внешность
+        self.appTime = max([triangles.get_triangle(i).appTime for i in range(triangles.count() - 1)]) + 1 # исключая внешность
 
     def v( self, idx ):
         return self.verts[idx]

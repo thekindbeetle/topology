@@ -111,7 +111,7 @@ class AllVertices:
         # соответствующих вершинам этого треугольника.
         # Результат: массив, индексы которого - глоальные номера точек,
         # в i-й ячейке - список индексов треугольников, содержащих i-ую вершину.
-        for idx in range(triangles.size()):
+        for idx in range(triangles.count()):
             self.incidTriangles[triangles.a_vert_of_triang(idx)].append(idx)
             self.incidTriangles[triangles.b_vert_of_triang(idx)].append(idx)
             self.incidTriangles[triangles.c_vert_of_triang(idx)].append(idx)

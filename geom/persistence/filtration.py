@@ -31,28 +31,43 @@ class Filtration:
     # Количество треугольников
     trNum = None
 
-    def __init__(self, vertices, edges, triangles):
-        self.vertices = vertices
-        self.edges = edges
-        self.triangles = triangles
-        self.vertNum = vertices.count()
-        self.edgeNum = edges.count()
-        self.trNum = triangles.size() # включая внешность
+    def __init__(self, points):
+        """
+        Построение фильтрации Чеха по набору точек из R^2.
+        :param points:
+        :return:
+        """
+
+        # Индексирование вершин, рёбер и треугольников
+        self.vertices = geom.all_vertices.AllVertices([geom.vert.Vert(idx, points[idx][0], points[idx][1]) for idx in range(len(points))])
+        self.triangles = geom.all_triangles.AllTriangles(points)
+        self.edges = geom.all_edges.AllEdges(self.triangles)
+        self.vertices.init_inc_edges(self.edges)
+        self.vertices.init_inc_triangles(self.triangles)
+        self.triangles.init_incident_edges(self.vertices, self.edges)
+        self.edges.init_incident_triangles(self.triangles)
+        self.edges.init_board_edges()
+        self.vertices.init_board_vertices(self.edges)
+        self.triangles.add_out(self.vertices, self.edges)
+
+        self.vertNum = self.vertices.count()
+        self.edgeNum = self.edges.count()
+        self.trNum = self.triangles.count() # включая внешность
         simpNum = self.vertNum + self.edgeNum + self.trNum
 
         self.simplexes = []
 
         # Добавление вершин, ребер, треугольников, внешности
         for i in range(self.vertNum):
-            self.simplexes.append(vertices.get_vert(i))
+            self.simplexes.append(self.vertices.get_vert(i))
         for i in range(self.edgeNum):
-            self.simplexes.append(edges.get_edge(i))
+            self.simplexes.append(self.edges.get_edge(i))
         for i in range(self.trNum):
-            self.simplexes.append(triangles.get_triangle(i))
+            self.simplexes.append(self.triangles.get_triangle(i))
 
         # Инициализация времен появления
         for s in self.simplexes:
-            s.set_appearance_time(vertices, edges, triangles)
+            s.set_appearance_time(self.vertices, self.edges, self.triangles)
 
         # Сортировка списка симплексов по времени появления
         self.sort_simplexes()
