@@ -22,8 +22,6 @@ class AllTriangles:
         # Создание пустого массива списков ребер, инцидентных треугольникам
         self.incidEdges = [[] for i in range(len(self.triangles))]
 
-        ##!! TODO: добавить внешность
-
     def size(self):
         """
         Количество треугольников в триангуляции в текущий момент.
