@@ -1,5 +1,5 @@
 import matplotlib.pyplot as pyplot
-from scipy.stats import *
+import generators.poisson
 import geom.vert
 import geom.all_vertices
 import geom.all_edges
@@ -7,22 +7,6 @@ import geom.all_triangles
 import geom.persistence.filtration
 import geom.persistence.persistence
 import triangle
-
-
-def poisson_point_process(rate, Dx, Dy=None):
-    """
-    Determines the number of events `N` for a rectangular region,
-    given the rate `rate` and the dimensions, `Dx`, `Dy`.
-    Returns a <2xN> NumPy array.
-    """
-    if Dy is None: Dy = Dx
-    N = poisson(rate * Dx * Dy).rvs()
-    x = uniform.rvs(0, Dx, N)
-    y = uniform.rvs(0, Dy, N)
-    out = [[x[i], y[i]] for i in range(N)]
-    print("{0} Poisson points generated.".format(N))
-    return out
-
 
 def get_persistence_diagram(points):
     """
@@ -56,7 +40,7 @@ def test():
     pyplot.show()
 
 
-points = poisson_point_process(1, 30)
+points = generators.poisson.poisson_homogeneous_point_process(1, 50)
 diagram = get_persistence_diagram(points)
 pyplot.scatter([diagram[i][0] for i in range(len(diagram))], [diagram[i][1] for i in range(len(diagram))], marker='o')
 pyplot.show()
