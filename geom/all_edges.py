@@ -21,6 +21,7 @@ class AllEdges:
         :param triangles: экземпляр AllTriangles
         """
         self.edges = triangles.get_all_edges()
+        print("Edges count: {0}".format(self.count()))
         self.incidTriangles = [[] for i in range(len(self.edges))]
 
     def count(self):

@@ -129,7 +129,7 @@ class Persistence:
                 tr_filt_idx_1 = self.filtration.get_inc_triang_of_edge(filt_idx)[1]
 
                 # Проверяем, граничит ли ребро с разными компонентами связности.
-                if (self.find(tr_filt_idx_0) != self.find(tr_filt_idx_1)):
+                if self.find(tr_filt_idx_0) != self.find(tr_filt_idx_1):
                     # Если да, компоненты сливаются, старшая компонента поглощает младшую.
                     # Значит, родился цикл, соответствующий младшей компоненте связности.
                     self._cycleBirthTimes[min(self.find(tr_filt_idx_0), self.find(tr_filt_idx_1))] =\

@@ -3,6 +3,7 @@ import geom.all_vertices
 import geom.all_edges
 import geom.all_triangles
 import geom.vert
+from operator import attrgetter
 
 class Filtration:
     """
@@ -20,9 +21,6 @@ class Filtration:
 
     # Список симплексов фильтрации
     simplexes = None
-
-    # Список времён появления симплексов в фильтрации
-    times = None
 
     # Количество вершин
     vertNum = None
@@ -43,7 +41,6 @@ class Filtration:
         simpNum = self.vertNum + self.edgeNum + self.trNum
 
         self.simplexes = []
-        self.times = []
 
         # Добавление вершин, ребер, треугольников, внешности
         for i in range(self.vertNum):
@@ -56,7 +53,6 @@ class Filtration:
         # Инициализация времен появления
         for s in self.simplexes:
             s.set_appearance_time(vertices, edges, triangles)
-            self.times.append(s.appTime)
 
         # Сортировка списка симплексов по времени появления
         self.sort_simplexes()
@@ -101,14 +97,16 @@ class Filtration:
         return [filt_tr_idx_0, filt_tr_idx_1]
 
     def sort_simplexes(self):
-        eps = 0.0001 # погрешность вычисления
-        # Сортируем одновременно список симплексов и список времён появления
-        for i in range(self.simplexes_num()):
-            for j in range(i):
-                # Время появления j-го симплекса больше i-го, или их времена появления совпадают и один из симплексов - ребро, а другой - треугольник
-                if ((self.times[j] > self.times[i] + eps) or (math.fabs(self.times[j] - self.times[i]) < eps and self.simplexes[j].dim == 2 and self.simplexes[i].dim == 1)):
-                    self.times[i], self.times[j] = self.times[j], self.times[i]  # меняем местами пару симплексов и времена их появления
-                    self.simplexes[i], self.simplexes[j] = self.simplexes[j], self.simplexes[i]
+        """
+        Сортировка симплексов по времени появления.
+        Важно! Используется устойчивая сортировка.
+        Поскольку в исходном списке треугольники идут после рёбер,
+        треугольники будут идти после рёбер с одинаковым временем появления.
+        :return:
+        """
+        print("Sort procedure starts...")
+        self.simplexes.sort(key=attrgetter('appTime'))
+        print("Simplexes successfully sorted.")
 
     def print(self):
         print("Filtratiion")

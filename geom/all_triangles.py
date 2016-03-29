@@ -17,8 +17,10 @@ class AllTriangles:
     incidEdges = None
     def __init__(self, vertices):
         tr = triangle.delaunay(vertices)
+        print("Delaunay triangulation was generated.")
         # Получение треугольников триангуляции
         self.triangles = [geom.triang.Triang(idx, tr[idx][0], tr[idx][1], tr[idx][2]) for idx in range(len(tr))]
+        print("Triangles count: {0}".format(self.size()))
         # Создание пустого массива списков ребер, инцидентных треугольникам
         self.incidEdges = [[] for i in range(len(self.triangles))]
 
@@ -45,6 +47,7 @@ class AllTriangles:
     def incident_edges_of_triangle(self, triang_idx):
         return self.incidEdges[triang_idx]
 
+    # TODO: ускорить работу процедуры
     def get_all_edges(self):
         edges = [] # список рёбер
         idx = 0

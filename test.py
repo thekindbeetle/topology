@@ -17,10 +17,11 @@ def poisson_point_process(rate, Dx, Dy=None):
     """
     if Dy is None: Dy = Dx
     N = poisson(rate * Dx * Dy).rvs()
-    print(N)
     x = uniform.rvs(0, Dx, N)
     y = uniform.rvs(0, Dy, N)
-    return [[x[i], y[i]] for i in range(N)]
+    out = [[x[i], y[i]] for i in range(N)]
+    print("{0} Poisson points generated.".format(N))
+    return out
 
 
 def get_persistence_diagram(points):
@@ -55,7 +56,7 @@ def test():
     pyplot.show()
 
 
-points = poisson_point_process(100, 1)
+points = poisson_point_process(1, 30)
 diagram = get_persistence_diagram(points)
 pyplot.scatter([diagram[i][0] for i in range(len(diagram))], [diagram[i][1] for i in range(len(diagram))], marker='o')
 pyplot.show()

@@ -24,6 +24,7 @@ class AllVertices:
         :param vertices: список вершин (Vert)
         """
         self.vertices = vertices
+        print("Vertices count: {0}".format(self.count()))
         self.incidEdges = [[] for i in range(len(vertices))]
         self.incidTriangles = [[] for i in range(len(vertices))]
 
