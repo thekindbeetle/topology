@@ -137,7 +137,6 @@ class Out(Triang):
     def __repr__(self):
         return "Outer face #{0}: {1}".format(self.globInd, self.verts)
 
-
     def set_appearance_time( self, vertices, edges, triangles ):
         """
         Устанавливаем внешности максимальное время появления

@@ -5,6 +5,7 @@ import geom.all_triangles
 import geom.vert
 from operator import attrgetter
 
+
 class Filtration:
     """
     Фильтрация Чеха для данного множества вершин в R^2
@@ -119,12 +120,12 @@ class Filtration:
         треугольники будут идти после рёбер с одинаковым временем появления.
         :return:
         """
-        print("Sort procedure starts...")
+        #print("Sort procedure starts...")
         self.simplexes.sort(key=attrgetter('appTime'))
-        print("Simplexes successfully sorted.")
+        #print("Simplexes successfully sorted.")
 
     def print(self):
-        print("Filtratiion")
+        print("Filtration")
         for s in self.simplexes:
             print("f.ind: {0}, appearance time = {1}, {2}".format(s.filtInd, s.appTime, s))
 

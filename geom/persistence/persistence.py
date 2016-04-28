@@ -223,7 +223,6 @@ class Persistence:
         #     }
         # }
 
-
 def test():
     verts = [
         [1.0, 1.0],

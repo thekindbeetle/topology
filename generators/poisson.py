@@ -1,4 +1,5 @@
 from scipy.stats import *
+import numpy as np
 
 
 def poisson_homogeneous_point_process(rate, dx, dy=None):
@@ -9,10 +10,10 @@ def poisson_homogeneous_point_process(rate, dx, dy=None):
     :param dy: ширина прямоугольника (по умолчанию равна длине)
     :return: список точек из R^2
     """
-    if dy is None: dy = dx
+    if dy is None:
+        dy = dx
     point_num = poisson(rate * dx * dy).rvs()
-    x = uniform.rvs(0, dx, point_num)
-    y = uniform.rvs(0, dy, point_num)
-    out = [[x[i], y[i]] for i in range(point_num)]
-    print("{0} Poisson points generated.".format(point_num))
+    x = uniform.rvs(0, dx, ((point_num, 1)))
+    y = uniform.rvs(0, dy, ((point_num, 1)))
+    out = np.hstack((x, y))
     return out
