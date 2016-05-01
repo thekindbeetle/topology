@@ -19,7 +19,7 @@ def uniform_disk(x, y, r):
     return x + xt, y + yt
 
 
-def matern_point_process(kappa, r, mu, dx):
+def matern_point_process(kappa, r, mu, dx, par=False):
     """
     A Poisson( kappa ) number of parents are created,
     each forming a Poisson( mu ) numbered cluster of points,
@@ -28,6 +28,7 @@ def matern_point_process(kappa, r, mu, dx):
     :param r: радиус круга, в котором для каждого родителя создаются потомки
     :param mu: параметр Пуассоновского распределения, определяющего количество потомков
     :param dx: длина стороны квадрата
+    :param par: вывести родительские события
     :return:
     """
     # create a set of parent points from a Poisson( kappa )
@@ -59,4 +60,7 @@ def matern_point_process(kappa, r, mu, dx):
 
     # return a numpy array
     mp = np.array(mp)
-    return mp
+    if par:
+      return mp, parents
+    else:
+      return mp

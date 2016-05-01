@@ -1,5 +1,7 @@
 import matplotlib.pyplot as pyplot
 import generators.poisson
+import generators.matern
+import generators.thomas
 import geom.vert
 import geom.all_vertices
 import geom.all_edges
@@ -43,8 +45,8 @@ def test_hard():
     pyplot.show()
 
 tim = []
-for i in range(20):
-    points = generators.poisson.poisson_homogeneous_point_process(1, 20)
+for i in range(2):
+    points = generators.poisson.poisson_homogeneous_point_process(1, 5000)
     d = triangle.delaunay(points)
     pers = get_persistence(points)
     #pyplot.figure(1)
@@ -55,6 +57,26 @@ for i in range(20):
     b_1 = max(pers.numOfCycles)
     n_a = max(pers.numOfBigComponents)
     tim.append(b_1 / n_a)
+
+print(np.mean(tim))
+print(np.sqrt(np.var(tim)))
+tim.clear()
+
+for i in range(2):
+    points = generators.matern.matern_point_process(280, 0.05, 17, 1)
+    print(len(points))
+    d = triangle.delaunay(points)
+    pers = get_persistence(points)
+    #pyplot.figure(1)
+    pyplot.plot(range(len(pers.numOfComponents)), pers.numOfComponents, '--b',
+                range(len(pers.numOfBigComponents)), pers.numOfBigComponents, '--r',
+                range(len(pers.numOfCycles)), pers.numOfCycles, '--g',)
+    #pyplot.show()
+    b_1 = max(pers.numOfCycles)
+    n_a = max(pers.numOfBigComponents)
+    tim.append(b_1 / n_a)
+
+
 pyplot.show()
 print(np.mean(tim))
 print(np.sqrt(np.var(tim)))
