@@ -13,6 +13,12 @@ class GridMesh:
     # Количество вершин
     size = 0
 
+    # Список критических точек
+    cr_cells = []
+
+    # Дискретный градиент
+    V = []
+
     # Значения сетки
     values = None
 
@@ -30,4 +36,12 @@ class GridMesh:
 
     @abc.abstractmethod
     def value(self, idx):
+        return
+
+    @abc.abstractmethod
+    def cmp_discrete_gradient(self):
+        return
+
+    @abc.abstractmethod
+    def cmp_ms_graph(self):
         return
