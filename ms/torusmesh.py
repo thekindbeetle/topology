@@ -5,6 +5,7 @@ import numpy as np
 import heapq
 from collections import deque
 
+
 class TorusMesh(GridMesh):
     """
     Квадратная сетка на торе
@@ -19,10 +20,13 @@ class TorusMesh(GridMesh):
     # Граф Морса-Смейла
     msgraph = None
 
+    # Дуги комплекса Морса-Смейла
+    arcs = []
+
     def __init__(self, lx, ly):
         GridMesh.__init__(self, lx, ly)
         self.cr_id = np.zeros(4 * self.size, dtype=bool)
-        self.V = [-1] * (4 * self.size)
+        self.V = [None] * (4 * self.size)
 
     def dim(self, idx):
         """
@@ -35,7 +39,7 @@ class TorusMesh(GridMesh):
         else:
             return 2
 
-    def critical_points(self, morse_index):
+    def cp(self, morse_index):
         """
         Вывести критические точек с данным индексом Морса.
         :param morse_index: Индекс Морса критической точки
@@ -54,7 +58,14 @@ class TorusMesh(GridMesh):
         Координаты центра клетки (вершины, ребра или ячейки)
         X и Y меняем местами!
         """
-        return np.mean([self.coordy(v) for v in self.verts(idx)]), np.mean([self.coordx(v) for v in self.verts(idx)])
+        if idx < self.size:
+            return self.coordy(idx), self.coordx(idx)
+        elif idx < self.size * 2:
+            return self.coordy(self.verts(idx)[0]) + 0.5, self.coordx(self.verts(idx)[0])
+        elif idx < self.size * 3:
+            return self.coordy(self.verts(idx)[0]), self.coordx(self.verts(idx)[0]) + 0.5
+        else:
+            return self.coordy(self.verts(idx)[0]) + 0.5, self.coordx(self.verts(idx)[0]) + 0.5
 
     def vleft(self, idx):
         """
@@ -138,6 +149,7 @@ class TorusMesh(GridMesh):
 
     def facets(self, idx):
         """
+        @tested
         Гиперграни ячейки с данным индексом
         """
         if self.dim(idx) == 2:
@@ -150,9 +162,12 @@ class TorusMesh(GridMesh):
 
     def cofacets(self, idx):
         """
+        @tested
         Пара инцидентных ребру IDX клеток
         :return: список из двух клеток
         """
+        if self.dim(idx) != 1:
+            raise AssertionError("Morse index must be 1!")
         if idx < 2 * self.size:  # горизонтальное ребро
             tmp_idx = idx - self.size
             return 3 * self.size + self.vtop(tmp_idx), 3 * self.size + tmp_idx
@@ -162,6 +177,7 @@ class TorusMesh(GridMesh):
 
     def verts(self, idx):
         """
+        @tested
         Множество вершин клетки
         """
         if idx < self.size:
@@ -210,21 +226,20 @@ class TorusMesh(GridMesh):
         """
         Указываем, что клетка является критической
         """
-        if not self.is_critical(idx):
-            self.cr_id[idx] = True
-            self.cr_cells.append(idx)
+        self.cr_id[idx] = True
+        self.cr_cells.append(idx)
 
     def is_unpaired(self, idx):
         """
         Проверяем, является ли клетка спаренной или помеченной как критическая
         """
-        return self.V[idx] < 0 and not self.is_critical(idx)
+        return (self.V[idx] is None) and (not self.is_critical(idx))
 
     def unpaired_facets(self, idx, s):
         """
         Неспаренные гиперграни
         (в статье имеется в виду именно это, а не просто грани)
-        данной 2-клетки,
+        данной 1- или 2-клетки,
         принадлежащих множеству s
         """
         facets = self.facets(idx)
@@ -256,6 +271,10 @@ class TorusMesh(GridMesh):
         is_top_lower = self.value(self.vtop(idx)) < v
         is_right_lower = self.value(self.vright(idx)) < v
         is_bottom_lower = self.value(self.vbottom(idx)) < v
+        is_left_bottom_lower = self.value(self.vleft(self.vbottom(idx))) < v
+        is_right_bottom_lower = self.value(self.vright(self.vbottom(idx))) < v
+        is_left_top_lower = self.value(self.vleft(self.vtop(idx))) < v
+        is_right_top_lower = self.value(self.vright(self.vtop(idx))) < v
         star = []
         if is_left_lower:
             star.append(self.eleft(idx))
@@ -265,24 +284,25 @@ class TorusMesh(GridMesh):
             star.append(self.eright(idx))
         if is_bottom_lower:
             star.append(self.ebottom(idx))
-        if is_left_lower and is_top_lower:
+        if is_left_lower and is_top_lower and is_left_top_lower:
             star.append(self.flefttop(idx))
-        if is_right_lower and is_top_lower:
+        if is_right_lower and is_top_lower and is_right_top_lower:
             star.append(self.frighttop(idx))
-        if is_left_lower and is_bottom_lower:
+        if is_left_lower and is_bottom_lower and is_left_bottom_lower:
             star.append(self.fleftbottom(idx))
-        if is_right_lower and is_bottom_lower:
+        if is_right_lower and is_bottom_lower and is_right_bottom_lower:
             star.append(self.frightbottom(idx))
         star.sort(key=(lambda x: self.extvalue(x)))
         return star
 
     def cmp_discrete_gradient(self):
         # Две вспомогательные кучи
-        pq_zero, pq_one = [], []
+        pq_zero = []
+        pq_one = []
 
         for idx in range(self.size):
             lstar = self.lower_star(idx)
-            if len(lstar) == 0:
+            if not lstar:
                 self.set_critical(idx)  # Если значение в вершине меньше, чем во всех соседних, то она - минимум.
             else:
                 delta = lstar[0]  # Ребро с наименьшим значением
@@ -294,7 +314,7 @@ class TorusMesh(GridMesh):
                 # Ко-грани ребра delta
                 cf = self.cofacets(delta)
                 for f in cf:
-                    if f in lstar and len(self.unpaired_facets(f, lstar)) == 1:
+                    if (f in lstar) and (len(self.unpaired_facets(f, lstar)) == 1):
                         heapq.heappush(pq_one, (self.extvalue(f), f))
                 while pq_one or pq_zero:
                     while pq_one:
@@ -307,17 +327,20 @@ class TorusMesh(GridMesh):
                             self.add_gradient_arrow(pair, alpha[1])
                             # TODO: remove pair from pq_zero faster
                             pq_zero = [x for x in pq_zero if x[1] != pair]
+                            #pq_zero.remove((self.extvalue(pair), pair))
                             heapq.heapify(pq_zero)
                             for beta in lstar:
-                                if len(self.unpaired_facets(beta, lstar)) == 1 and \
-                                        (alpha in self.facets(beta) or pair in self.facets(beta)):
+                                if len(self.unpaired_facets(beta, lstar)) == 1 and ((alpha in self.facets(beta)) or (pair in self.facets(beta))):
                                     heapq.heappush(pq_one, (self.extvalue(beta), beta))
                     if pq_zero:
-                        gamma = heapq.heappop(pq_zero)[1]
-                        self.set_critical(gamma)
-                        for alpha in lstar:
-                            if gamma in self.facets(alpha) and self.unpaired_facets(alpha, lstar) == 1:
-                                heapq.heappush(pq_one, (self.extvalue(alpha), alpha))
+                        gamma = heapq.heappop(pq_zero)
+                        self.set_critical(gamma[1])
+                        for a in lstar:
+                            if (gamma[1] in self.facets(a)) and (len(self.unpaired_facets(a, lstar)) == 1):
+                                heapq.heappush(pq_one, (self.extvalue(a), a))
+
+        # Строим обратное отображение для списка критических точек
+        self.idx_to_cidx = {self.cr_cells[cidx]: cidx for cidx in range(len(self.cr_cells))}
 
     def cmp_ms_graph(self):
         """
@@ -326,13 +349,10 @@ class TorusMesh(GridMesh):
         """
         self.msgraph = [[] for i in range(len(self.cr_cells))]
 
-        # Обратное отображение для списка критических точек
-        self.idx_to_cidx = {self.cr_cells[cidx]: cidx for cidx in range(len(self.cr_cells))}
-
         q = deque()
 
-        for dimension in (1, 2):
-            for idx in self.critical_points(dimension):
+        for dimension in (1, ):
+            for idx in self.cp(dimension):
                 cidx = self.idx_to_cidx[idx]  # Индекс в списке критических точек
                 g = self.facets(idx)
                 for face in g:
@@ -353,12 +373,57 @@ class TorusMesh(GridMesh):
                         elif self.V[face] > face:
                             q.appendleft(face)
 
+    def cmp_arcs(self):
+        """
+        Вычисляем сепаратрисы MS-комплекса.
+        Граф к моменту вызова функции должен быть вычислен.
+        :return:
+        """
+        for s in self.cp(1): # Цикл по сёдлам
+            print("Handle {0} saddle".format(s))
+
+            # Вычисляем сепаратрисы седло-минимум
+            vertices = self.verts(s)
+
+            for cur_v in vertices:
+                # Идём в двух возможных направлениях
+                cur_e = s
+                separx = [cur_e, cur_v]  # Новая сепаратриса
+                # Идём по сепаратрисе, пока не встретим критическую клетку
+
+                while not self.is_critical(cur_v):
+                    # Идём вдоль интегральной линии
+                    cur_e = self.V[cur_v]
+                    v = self.verts(cur_e)
+                    # Выбираем путь вперёд (в ещё не пройденную клетку)
+                    cur_v = v[1] if v[0] == cur_v else v[0]
+                    separx.append(cur_e)
+                    separx.append(cur_v)
+                self.arcs.append(separx)
+
+            # Вычисляем сепаратрисы седло-максимум
+            faces = self.cofacets(s)
+
+            # Идём в двух возможных направлениях
+            for cur_f in faces:
+                cur_e = s
+                separx = [cur_e, cur_f] # Новая сепаратриса
+                while not self.is_critical(cur_f):
+                    # Идём вдоль интегральной линии
+                    cur_e = self.V[cur_f]
+                    f = self.cofacets(cur_e)
+                    # Выбираем путь вперёд (в ещё не пройденную клетку)
+                    cur_f = f[1] if f[0] == cur_f else f[0]
+                    separx.append(cur_e)
+                    separx.append(cur_f)
+                self.arcs.append(separx)
+
     def print(self):
         print(self.values)
 
-    def draw(self, draw_crit_pts=True, draw_graph=True):
+    def draw(self, draw_crit_pts=True, draw_gradient=True, draw_graph=False, draw_arcs=True):
         plt.figure()
-        plt.pcolor(m.values, cmap="Blues")
+        plt.pcolor(self.values, cmap="Blues")
         if draw_graph:
             edges = []
             for cidx in range(len(self.cr_cells)):
@@ -366,23 +431,62 @@ class TorusMesh(GridMesh):
                     edges.append([self.coords(self.cr_cells[cidx]), self.coords(self.cr_cells[cidx2])])
             lc = mc.LineCollection(edges, colors='k', linewidths=2)
             plt.gca().add_collection(lc)
+        if draw_gradient:
+            x, y, X, Y = [], [], [], []
+            for idx in range(len(self.V)):
+                if self.V[idx] is None:
+                    continue
+                if idx < self.V[idx]:
+                    start = self.coords(idx)
+                    end = self.coords(self.V[idx])
+                    if start[0] != 0 and end[0] != 0 and start[1] != 0 and end[1] != 0:
+                        x.append(start[0])
+                        y.append(start[1])
+                        X.append(end[0] - start[0])
+                        Y.append(end[1] - start[1])
+            plt.quiver(x, y, X, Y, scale_units='x', angles='xy', scale=2)
+        if draw_arcs:
+            edges=[]
+            for arc in self.arcs:
+                for idx in range(len(arc) - 1):
+                    edge = [self.coords(arc[idx]), self.coords(arc[idx + 1])]
+                    if np.abs(edge[0][0] - edge[1][0]) < 1 and np.abs(edge[0][1] - edge[1][1]) < 1:
+                        edges.append([self.coords(arc[idx]), self.coords(arc[idx + 1])])
+            lc = mc.LineCollection(edges, colors='k')
+            plt.gca().add_collection(lc)
         if draw_crit_pts:
-            plt.scatter([self.coords(p)[0] for p in m.critical_points(0)], [self.coords(p)[1] for p in m.critical_points(0)], c='b')
-            plt.scatter([self.coords(p)[0] for p in m.critical_points(1)], [self.coords(p)[1] for p in m.critical_points(1)], c='g')
-            plt.scatter([self.coords(p)[0] for p in m.critical_points(2)], [self.coords(p)[1] for p in m.critical_points(2)], c='r')
+            plt.scatter([self.coords(p)[0] for p in self.cp(0)], [self.coords(p)[1] for p in self.cp(0)], c='b', s=50)
+            plt.scatter([self.coords(p)[0] for p in self.cp(1)], [self.coords(p)[1] for p in self.cp(1)], c='g', s=50)
+            plt.scatter([self.coords(p)[0] for p in self.cp(2)], [self.coords(p)[1] for p in self.cp(2)], c='r', s=50)
 
         plt.show()
 
 
-np.set_printoptions(precision=3)
-size = 100
-sincos = lambda x, y: np.sin(x * 0.1) + np.cos(y * 0.238884)
-field = np.zeros((size, size))
-for i in range(size):
-    for j in range(size):
-        field[i, j] = sincos(i, j)
+
+
+import ms.field_generator as gen
+import generators.poisson
+# np.set_printoptions(precision=3)
+size = 200
+
+centers = generators.poisson.poisson_homogeneous_point_process(0.0005, size, size)
+field = gen.gen_gaussian_sum(size, size, centers, 50)
+# field = field * 1000000
+# #field = gen.gen_sincos_field(size, size, 0.37, 0.37)
+# field = np.zeros((size, size))
+#field = np.asarray([[2, 8, 1], [9, 5, 6], [7, 3, 4]])
+# for i in range(size):
+# #     for j in range(size):
+# #         field[i, j] = np.sin(j) * 50 - np.sin(i * 0.05) * 220 + np.sin(i * j) * 20
+gen.perturb(field)
+print(field)
+
 m = TorusMesh(size, size)
 m.set_values(field)
 m.cmp_discrete_gradient()
 m.cmp_ms_graph()
-m.draw()
+print([len(m.cp(i)) for i in range(3)])
+m.cmp_arcs()
+m.draw(draw_gradient=False, draw_arcs=False, draw_graph=True)
+
+
