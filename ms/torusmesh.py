@@ -351,7 +351,7 @@ class TorusMesh(GridMesh):
 
         q = deque()
 
-        for dimension in (1, ):
+        for dimension in (1, 2):
             for idx in self.cp(dimension):
                 cidx = self.idx_to_cidx[idx]  # Индекс в списке критических точек
                 g = self.facets(idx)
@@ -380,8 +380,6 @@ class TorusMesh(GridMesh):
         :return:
         """
         for s in self.cp(1): # Цикл по сёдлам
-            print("Handle {0} saddle".format(s))
-
             # Вычисляем сепаратрисы седло-минимум
             vertices = self.verts(s)
 
@@ -423,7 +421,8 @@ class TorusMesh(GridMesh):
 
     def draw(self, draw_crit_pts=True, draw_gradient=True, draw_graph=False, draw_arcs=True):
         plt.figure()
-        plt.pcolor(self.values, cmap="Blues")
+        cur_plot = plt.pcolor(self.values, cmap="Blues")
+        plt.colorbar(cur_plot)
         if draw_graph:
             edges = []
             for cidx in range(len(self.cr_cells)):
@@ -458,7 +457,6 @@ class TorusMesh(GridMesh):
             plt.scatter([self.coords(p)[0] for p in self.cp(0)], [self.coords(p)[1] for p in self.cp(0)], c='b', s=50)
             plt.scatter([self.coords(p)[0] for p in self.cp(1)], [self.coords(p)[1] for p in self.cp(1)], c='g', s=50)
             plt.scatter([self.coords(p)[0] for p in self.cp(2)], [self.coords(p)[1] for p in self.cp(2)], c='r', s=50)
-
         plt.show()
 
 
@@ -467,10 +465,10 @@ class TorusMesh(GridMesh):
 import ms.field_generator as gen
 import generators.poisson
 # np.set_printoptions(precision=3)
-size = 200
+size = 50
 
-centers = generators.poisson.poisson_homogeneous_point_process(0.0005, size, size)
-field = gen.gen_gaussian_sum(size, size, centers, 50)
+centers = generators.poisson.poisson_homogeneous_point_process(0.003, size, size)
+field = gen.gen_gaussian_sum(size, size, centers, 10)
 # field = field * 1000000
 # #field = gen.gen_sincos_field(size, size, 0.37, 0.37)
 # field = np.zeros((size, size))
