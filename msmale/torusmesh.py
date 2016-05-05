@@ -1,6 +1,6 @@
 import matplotlib.pyplot as plt
 import matplotlib.collections as mc
-from ms.mesh import GridMesh
+from msmale.mesh import GridMesh
 import numpy as np
 import heapq
 from collections import deque
@@ -61,9 +61,9 @@ class TorusMesh(GridMesh):
         if idx < self.size:
             return self.coordy(idx), self.coordx(idx)
         elif idx < self.size * 2:
-            return self.coordy(self.verts(idx)[0]) + 0.5, self.coordx(self.verts(idx)[0])
-        elif idx < self.size * 3:
             return self.coordy(self.verts(idx)[0]), self.coordx(self.verts(idx)[0]) + 0.5
+        elif idx < self.size * 3:
+            return self.coordy(self.verts(idx)[0]) + 0.5, self.coordx(self.verts(idx)[0])
         else:
             return self.coordy(self.verts(idx)[0]) + 0.5, self.coordx(self.verts(idx)[0]) + 0.5
 
@@ -83,7 +83,7 @@ class TorusMesh(GridMesh):
         """
         Верхний сосед вершины с заданным индексом
         """
-        return (idx + - self.sizeX) % self.size
+        return (idx + self.size - self.sizeX) % self.size
 
     def vbottom(self, idx):
         """
@@ -202,13 +202,13 @@ class TorusMesh(GridMesh):
         """
         Координата X вершины
         """
-        return idx // self.sizeY
+        return idx % self.sizeX
 
     def coordy(self, idx):
         """
         Координата Y вершины
         """
-        return idx % self.sizeX
+        return idx // self.sizeX
 
     def value(self, idx):
         """
@@ -299,8 +299,12 @@ class TorusMesh(GridMesh):
         # Две вспомогательные кучи
         pq_zero = []
         pq_one = []
+        percentage = 0
 
         for idx in range(self.size):
+            if idx / self.size > (percentage + 1) * 0.01:
+                percentage += 1
+                print("Gradient computation... {0}% completed".format(percentage))
             lstar = self.lower_star(idx)
             if not lstar:
                 self.set_critical(idx)  # Если значение в вершине меньше, чем во всех соседних, то она - минимум.
@@ -419,7 +423,7 @@ class TorusMesh(GridMesh):
     def print(self):
         print(self.values)
 
-    def draw(self, draw_crit_pts=True, draw_gradient=True, draw_graph=False, draw_arcs=True):
+    def draw(self, draw_crit_pts=True, draw_gradient=True, draw_arcs=True, draw_graph=False):
         plt.figure()
         cur_plot = plt.pcolor(self.values, cmap="Blues")
         plt.colorbar(cur_plot)
@@ -428,7 +432,7 @@ class TorusMesh(GridMesh):
             for cidx in range(len(self.cr_cells)):
                 for cidx2 in self.msgraph[cidx]:
                     edges.append([self.coords(self.cr_cells[cidx]), self.coords(self.cr_cells[cidx2])])
-            lc = mc.LineCollection(edges, colors='k', linewidths=2)
+            lc = mc.LineCollection(edges, colors='k', linewidths=2, zorder=1)
             plt.gca().add_collection(lc)
         if draw_gradient:
             x, y, X, Y = [], [], [], []
@@ -451,40 +455,24 @@ class TorusMesh(GridMesh):
                     edge = [self.coords(arc[idx]), self.coords(arc[idx + 1])]
                     if np.abs(edge[0][0] - edge[1][0]) < 1 and np.abs(edge[0][1] - edge[1][1]) < 1:
                         edges.append([self.coords(arc[idx]), self.coords(arc[idx + 1])])
-            lc = mc.LineCollection(edges, colors='k')
+            lc = mc.LineCollection(edges, colors='k', linewidths=1, zorder=1)
             plt.gca().add_collection(lc)
         if draw_crit_pts:
-            plt.scatter([self.coords(p)[0] for p in self.cp(0)], [self.coords(p)[1] for p in self.cp(0)], c='b', s=50)
-            plt.scatter([self.coords(p)[0] for p in self.cp(1)], [self.coords(p)[1] for p in self.cp(1)], c='g', s=50)
-            plt.scatter([self.coords(p)[0] for p in self.cp(2)], [self.coords(p)[1] for p in self.cp(2)], c='r', s=50)
+            plt.scatter([self.coords(p)[0] for p in self.cp(0)], [self.coords(p)[1] for p in self.cp(0)], zorder=2, c='b', s=50)
+            plt.scatter([self.coords(p)[0] for p in self.cp(1)], [self.coords(p)[1] for p in self.cp(1)], zorder=2, c='g', s=50)
+            plt.scatter([self.coords(p)[0] for p in self.cp(2)], [self.coords(p)[1] for p in self.cp(2)], zorder=2, c='r', s=50)
         plt.show()
 
-
-
-
-import ms.field_generator as gen
-import generators.poisson
-# np.set_printoptions(precision=3)
-size = 50
-
-centers = generators.poisson.poisson_homogeneous_point_process(0.003, size, size)
-field = gen.gen_gaussian_sum(size, size, centers, 10)
-# field = field * 1000000
-# #field = gen.gen_sincos_field(size, size, 0.37, 0.37)
-# field = np.zeros((size, size))
-#field = np.asarray([[2, 8, 1], [9, 5, 6], [7, 3, 4]])
-# for i in range(size):
-# #     for j in range(size):
-# #         field[i, j] = np.sin(j) * 50 - np.sin(i * 0.05) * 220 + np.sin(i * j) * 20
-gen.perturb(field)
-print(field)
-
-m = TorusMesh(size, size)
-m.set_values(field)
-m.cmp_discrete_gradient()
-m.cmp_ms_graph()
-print([len(m.cp(i)) for i in range(3)])
-m.cmp_arcs()
-m.draw(draw_gradient=False, draw_arcs=False, draw_graph=True)
-
-
+def test():
+    """
+    Максимум 27
+    два минимума 2, 7
+    три седла 15, 16, 23
+    """
+    field = np.asarray([[2, 8, 1], [9, 5, 6], [7, 3, 4]])
+    m = TorusMesh(3, 3)
+    m.set_values(field)
+    m.cmp_discrete_gradient()
+    m.cmp_ms_graph()
+    m.cmp_arcs()
+    m.draw(draw_gradient=False, draw_arcs=True, draw_graph=False)

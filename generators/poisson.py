@@ -16,4 +16,5 @@ def poisson_homogeneous_point_process(rate, dx, dy=None):
     x = uniform.rvs(0, dx, ((point_num, 1)))
     y = uniform.rvs(0, dy, ((point_num, 1)))
     out = np.hstack((x, y))
+    print("{0} points generated".format(point_num))
     return out
