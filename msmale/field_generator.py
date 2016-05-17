@@ -3,9 +3,9 @@ import numpy.random
 import scipy.stats
 
 
-def gen_gaussian_sum(str, col, centers, sigma):
+def gen_gaussian_sum_rectangle(str, col, centers, sigma):
     """
-    Матрица, являющаяся суммой гауссиан
+    Матрица, являющаяся суммой гауссиан (на прямоугольнике)
     :param str: количество строк матрицы
     :param col: количество столбцов матрицы
     :param centers: список центров (не обязательно целочисленных, могут даже лежать за пределами матрицы!)
@@ -17,6 +17,30 @@ def gen_gaussian_sum(str, col, centers, sigma):
             for j in range(col):
                 field[i, j] += scipy.stats.multivariate_normal.pdf((i, j), mean=center, cov=((sigma, 0), (0, sigma)))
     print("Field {0}x{1} generated as sum of {2} gaussians".format(str, col, len(centers)))
+    return field
+
+
+def gen_gaussian_sum_torus(str, col, centers, sigma):
+    """
+    Матрица, являющаяся суммой гауссиан на торе.
+    Считаем значения гауссиан за пределами 3-сигма нулевыми.
+    :param str: количество строк матрицы
+    :param col: количество столбцов матрицы
+    :param centers: список центров (не обязательно целочисленных, могут даже лежать за пределами матрицы!)
+    :param sigma: ширина гауссиан
+    :return:
+    """
+    field = np.zeros((str, col))
+    sigma3 = int(sigma * 3)
+    gaussian = np.zeros((sigma3 * 2 + 1, sigma3 * 2 + 1))
+    for i in range(-sigma3, sigma3 + 1):
+        for j in range(-sigma3, sigma3 + 1):
+            if i ** 2 + j ** 2 <= sigma3:
+                gaussian[i, j] += scipy.stats.multivariate_normal.pdf((i, j), mean=(0, 0), cov=((sigma, 0), (0, sigma)))
+    for center in centers:
+        for i in range(-sigma3, sigma3 + 1):
+            for j in range(-sigma3, sigma3 + 1):
+                field[(int(center[0]) + i) % str, (int(center[1]) + j) % str] += gaussian[i, j]
     return field
 
 

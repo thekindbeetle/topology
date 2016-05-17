@@ -1,15 +1,29 @@
 import matplotlib.pyplot as plt
 import matplotlib.collections as mc
-from msmale.mesh import GridMesh
 import numpy as np
 import heapq
+from bitarray import bitarray
 from collections import deque
 
 
-class TorusMesh(GridMesh):
+class TorusMesh:
     """
-    Квадратная сетка на торе
+    Прямоугольная сетка на торе
     """
+    # Размеры сетки по X и Y
+    sizeX, sizeY = 0, 0
+
+    # Количество вершин
+    size = 0
+
+    # Список критических клеток
+    cr_cells = []
+
+    # Дискретный градиент
+    V = []
+
+    # Значения сетки
+    values = None
 
     # Индикатор критических клеток
     cr_id = []
@@ -24,9 +38,22 @@ class TorusMesh(GridMesh):
     arcs = []
 
     def __init__(self, lx, ly):
-        GridMesh.__init__(self, lx, ly)
-        self.cr_id = np.zeros(4 * self.size, dtype=bool)
+        self.sizeX = lx
+        self.sizeY = ly
+        self.size = lx * ly
+        self.values = np.zeros((self.sizeX, self.sizeY))
+        self.cr_cells = []
         self.V = [None] * (4 * self.size)
+        self.cr_id = np.zeros(4 * self.size, dtype=bool)
+        self.idx_to_cidx = []
+        self.msgragh = None
+        self.arcs = []
+
+    def set_values(self, val):
+        """
+        :param val: NumPy array
+        """
+        self.values = val
 
     def dim(self, idx):
         """
@@ -41,7 +68,7 @@ class TorusMesh(GridMesh):
 
     def cp(self, morse_index):
         """
-        Вывести критические точек с данным индексом Морса.
+        Вывести критические точки с данным индексом Морса.
         :param morse_index: Индекс Морса критической точки
         :return: список индексов критических точек
         """
@@ -419,6 +446,36 @@ class TorusMesh(GridMesh):
                     separx.append(cur_e)
                     separx.append(cur_f)
                 self.arcs.append(separx)
+
+    def assign_labels(self):
+        """
+        Пометить критические клетки как негативные (создающие цикл) или позитивные (убивающие цикл).
+        :return:
+        """
+
+    def cmp_persistent_pairs(self):
+        """
+        Вычисление персистентных пар
+        :return:
+        """
+        unsorted_pairs = []
+
+        # список циклов
+        # каждый цикл соответствует негативной клетке
+        cycles = []
+
+        # проходим по прямой фильтрации
+        # for i in range(len(self.cr_cells)):
+        #     cc = self.cr_cells[i]
+        #     if self.dim(cc) == 1 and
+        #   if( dim(i) == 1 && _signs[i] == -1 ) // смотрим только негативные сёдла
+        #     cycle_search_min_saddle(unsorted_pairs, i, cycles);
+        # }
+        # // проходим по обратной фильтрации
+        # for( int i = m.crit.len() - 1; i >= 0; i-- ){
+        #   if( dim(i) == 1 && _signs[i] == 1 ) // смотрим только позитивные сёдла
+        #     cycle_search_max_saddle(unsorted_pairs, i, cycles);
+        # }
 
     def print(self):
         print(self.values)
