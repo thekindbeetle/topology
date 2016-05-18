@@ -4,6 +4,7 @@ import numpy as np
 import heapq
 from bitarray import bitarray
 from collections import deque
+import msmale.unionfind
 
 
 class TorusMesh:
@@ -33,6 +34,9 @@ class TorusMesh:
 
     # Граф Морса-Смейла
     msgraph = None
+
+    # Метки критических клеток (негативная / позитивная)
+    _signs = None
 
     # Дуги комплекса Морса-Смейла
     arcs = []
@@ -279,6 +283,19 @@ class TorusMesh:
         self.V[start] = end
         self.V[end] = start
 
+    def get_min_neib_msgraph(self, idx):
+        """
+        Соседи-минимумы седла в МС-графе.
+        Выводятся индексы в списке crit_cells.
+        :return:
+        """
+        if self.dim(self.cr_cells[idx]) != 1:
+            raise AssertionError("Функция get_min_neib_msgraph должна вызываться с аргументом-седлом")
+        result = [cell for cell in self.msgraph[idx] if self.dim(self.cr_cells[cell]) == 0]
+        if len(result) != 2:
+            raise ValueError("Ошибка: у седла должны быть ровно два соседа-минимума!")
+        return result
+
     def star(self, idx):
         """
         Звезда вершины idx
@@ -370,6 +387,9 @@ class TorusMesh:
                             if (gamma[1] in self.facets(a)) and (len(self.unpaired_facets(a, lstar)) == 1):
                                 heapq.heappush(pq_one, (self.extvalue(a), a))
 
+        # Сортируем клетки по возрастанию значения — получаем фильтрацию.
+        self.cr_cells.sort(key=lambda idx: self.extvalue(idx))
+
         # Строим обратное отображение для списка критических точек
         self.idx_to_cidx = {self.cr_cells[cidx]: cidx for cidx in range(len(self.cr_cells))}
 
@@ -452,6 +472,29 @@ class TorusMesh:
         Пометить критические клетки как негативные (создающие цикл) или позитивные (убивающие цикл).
         :return:
         """
+        # Инициализация массива отметок
+        self._signs = bitarray(len(self.cr_cells))
+
+        uf = msmale.unionfind.UnionFind(len(self.cr_cells))
+
+        # Cчитаем, что к этому моменту массив критических точек представляет собой фильтрацию.
+        for i in range(len(self.cr_cells)):
+            cc = self.cr_cells[i]
+            dim = self.dim(cc)  # размерность критической клетки
+            uf.makeset(i)
+            if dim == 0:
+                self._signs[i] = 1 # все минимумы - позитивные
+            elif dim == 1:
+                # находим двух соседей в ms-комплексе, которые являются минимумами
+                # у каждого седла два соседа-минимума и два соседа-максимума
+                neighbours = self.get_min_neib_msgraph(i)  # соседи-минимумы в графе ms-комплекса
+                if uf.find(neighbours[0]) == uf.find(neighbours[1]):
+                    self._signs[i] = 1  # седло порождает 1-цикл
+                else:
+                    self._signs[i] = 0  # седло убивает 0-цикл
+                uf.union(neighbours[0], neighbours[1])  # Объединяем компоненты связности
+            else:
+                self._signs[i] = 0  # все максимумы - негативные
 
     def cmp_persistent_pairs(self):
         """
@@ -531,5 +574,7 @@ def test():
     m.set_values(field)
     m.cmp_discrete_gradient()
     m.cmp_ms_graph()
+    m.assign_labels()
     m.cmp_arcs()
+    print(m._signs)
     m.draw(draw_gradient=False, draw_arcs=True, draw_graph=False)
