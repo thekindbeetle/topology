@@ -5,6 +5,8 @@ import heapq
 from bitarray import bitarray
 from collections import deque
 import msmale.unionfind
+import copy
+import re
 
 
 class TorusMesh:
@@ -28,6 +30,9 @@ class TorusMesh:
 
     # Индикатор критических клеток
     cr_id = []
+
+    # Список персистентных пар
+    ppairs = []
 
     # Обратное отображение для списка критических точек
     idx_to_cidx = []
@@ -296,6 +301,19 @@ class TorusMesh:
             raise ValueError("Ошибка: у седла должны быть ровно два соседа-минимума!")
         return result
 
+    def get_max_neib_msgraph(self, idx):
+        """
+        Соседи-максимумы седла в МС-графе.
+        Выводятся индексы в списке crit_cells.
+        :return:
+        """
+        if self.dim(self.cr_cells[idx]) != 1:
+            raise AssertionError("Функция get_min_neib_msgraph должна вызываться с аргументом-седлом")
+        result = [cell for cell in self.msgraph[idx] if self.dim(self.cr_cells[cell]) == 2]
+        if len(result) != 2:
+            raise ValueError("Ошибка: у седла должны быть ровно два соседа-максимума!")
+        return result
+
     def star(self, idx):
         """
         Звезда вершины idx
@@ -501,29 +519,69 @@ class TorusMesh:
         Вычисление персистентных пар
         :return:
         """
-        unsorted_pairs = []
+        # Несортированный массив персистентных пар
+        pairs = []
 
         # список циклов
         # каждый цикл соответствует негативной клетке
-        cycles = []
+        cycles = [None] * len(self.cr_cells)
+
+        curset = len(self.cr_cells) * bitarray('0')
+
+        # Последнее вхождение единицы в битовый массив (если её нет — ValueError)
+        get_highest_of = lambda bitset: bitset.to01().rindex('1')
+
+        # Первое вхождение единицы в битовый массив (если её нет — ValueError)
+        get_lowest_of = lambda bitset: bitset.to01().index('1')
+
+        # Персистентность пары
+        pers = lambda idx1, idx2: np.abs(np.mean(self.extvalue(self.cr_cells[idx1])) - np.mean(self.extvalue(self.cr_cells[idx2])))
 
         # проходим по прямой фильтрации
-        # for i in range(len(self.cr_cells)):
-        #     cc = self.cr_cells[i]
-        #     if self.dim(cc) == 1 and
-        #   if( dim(i) == 1 && _signs[i] == -1 ) // смотрим только негативные сёдла
-        #     cycle_search_min_saddle(unsorted_pairs, i, cycles);
-        # }
-        # // проходим по обратной фильтрации
-        # for( int i = m.crit.len() - 1; i >= 0; i-- ){
-        #   if( dim(i) == 1 && _signs[i] == 1 ) // смотрим только позитивные сёдла
-        #     cycle_search_max_saddle(unsorted_pairs, i, cycles);
-        # }
+        for i in range(len(self.cr_cells)):
+            cc = self.cr_cells[i]
+            # Смотрим только негативные сёдла
+            if self.dim(cc) == 1 and not self._signs[i]:
+                for neib in self.get_min_neib_msgraph(i):
+                    curset[neib] = True   # 5:
+                while curset.count() > 0:
+                    s = get_highest_of(curset)  # 9:
+                    if not cycles[s]:
+                        cycles[s] = copy.deepcopy(curset)
+                        cycles[i] = copy.deepcopy(curset)
+                        pairs.append((s, i, pers(s, i)))
+                    else:
+                        for b in re.finditer('1', cycles[s].to01()):  # 16:
+                            idx = b.span()[0]
+                            curset[idx] ^= 1  # bit flip operation
+
+        curset = len(self.cr_cells) * bitarray('0')
+
+        # проходим по обратной фильтрации
+        for i in reversed(range(len(self.cr_cells))):
+            cc = self.cr_cells[i]
+            # Смотрим только позитивные сёдла
+            if self.dim(cc) == 1 and self._signs[i]:
+                for neib in self.get_max_neib_msgraph(i):
+                    curset[neib] = True
+                while curset.count() > 0:
+                    s = get_lowest_of(curset)
+                    if not cycles[s]:
+                        cycles[s] = copy.deepcopy(curset)
+                        cycles[i] = copy.deepcopy(curset)
+                        pairs.append((s, i, pers(s, i)))
+                    else:
+                        for b in re.finditer('1', cycles[s].to01()):  # 16:
+                            idx = b.span()[0]
+                            curset[idx] ^= 1  # bit flip operation
+
+        pairs.sort(key=lambda x: x[2])  # Сортируем пары по значению
+        self.ppairs = pairs
 
     def print(self):
         print(self.values)
 
-    def draw(self, draw_crit_pts=True, draw_gradient=True, draw_arcs=True, draw_graph=False):
+    def draw(self, draw_crit_pts=True, annotate_crit_points=False, draw_persistence_pairs=False, draw_gradient=True, draw_arcs=True, draw_graph=False):
         plt.figure()
         cur_plot = plt.pcolor(self.values, cmap="Blues")
         plt.colorbar(cur_plot)
@@ -549,7 +607,7 @@ class TorusMesh:
                         Y.append(end[1] - start[1])
             plt.quiver(x, y, X, Y, scale_units='x', angles='xy', scale=2)
         if draw_arcs:
-            edges=[]
+            edges = []
             for arc in self.arcs:
                 for idx in range(len(arc) - 1):
                     edge = [self.coords(arc[idx]), self.coords(arc[idx + 1])]
@@ -561,6 +619,16 @@ class TorusMesh:
             plt.scatter([self.coords(p)[0] for p in self.cp(0)], [self.coords(p)[1] for p in self.cp(0)], zorder=2, c='b', s=50)
             plt.scatter([self.coords(p)[0] for p in self.cp(1)], [self.coords(p)[1] for p in self.cp(1)], zorder=2, c='g', s=50)
             plt.scatter([self.coords(p)[0] for p in self.cp(2)], [self.coords(p)[1] for p in self.cp(2)], zorder=2, c='r', s=50)
+        if annotate_crit_points:
+            for cidx in range(len(self.cr_cells)):
+                p = self.cr_cells[cidx]
+                plt.text(self.coords(p)[0], self.coords(p)[1], str(cidx))
+        if draw_persistence_pairs:
+            edges = []
+            for pairs in self.ppairs:
+                edges.append([self.coords(self.cr_cells[pairs[0]]), self.coords(self.cr_cells[pairs[1]])])
+            lc = mc.LineCollection(edges, colors='r', linewidths=2, zorder=1)
+            plt.gca().add_collection(lc)
         plt.show()
 
 def test():
@@ -578,3 +646,20 @@ def test():
     m.cmp_arcs()
     print(m._signs)
     m.draw(draw_gradient=False, draw_arcs=True, draw_graph=False)
+
+import generators.matern
+import msmale.field_generator
+
+centers = generators.matern.matern_point_process(0.5, 10, 3, 20)
+data = msmale.field_generator.gen_gaussian_sum_torus(20, 20, centers, 4)
+msmale.field_generator.perturb(data)
+m = TorusMesh(data.shape[0], data.shape[1])
+m.set_values(data)
+m.print()
+m.cmp_discrete_gradient()
+m.cmp_arcs()
+m.cmp_ms_graph()
+m.assign_labels()
+m.cmp_persistent_pairs()
+print(m.ppairs)
+m.draw(draw_arcs=True, draw_gradient=False, draw_crit_pts=True, annotate_crit_points=True, draw_persistence_pairs=True)
