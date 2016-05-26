@@ -377,7 +377,7 @@ class TorusMesh:
 
         for idx in range(self.size):
             if idx / self.size > (percentage + 1) * 0.01:
-                percentage += 1
+                percentage += 5
                 print("Gradient computation... {0}% completed".format(percentage))
             lstar = self.lower_star(idx)
             if not lstar:
@@ -702,8 +702,19 @@ class TorusMesh:
     def print(self):
         print(self.values)
 
-    def draw(self, draw_crit_pts=True, annotate_crit_points=False, draw_persistence_pairs=False, draw_gradient=True, draw_arcs=True, draw_graph=False):
+    def draw(self,
+             draw_crit_pts=True,
+             annotate_crit_points=False,
+             draw_persistence_pairs=False,
+             draw_gradient=True,
+             draw_arcs=True,
+             draw_graph=False,
+             fname=None):
         plt.figure()
+        plt.gca().set_xlim(0, self.sizeX)
+        plt.gca().set_ylim(0, self.sizeY)
+        figManager = plt.get_current_fig_manager()
+        figManager.window.showMaximized()
         cur_plot = plt.pcolor(self.values, cmap="Blues")
         plt.colorbar(cur_plot)
         if draw_graph:
@@ -750,7 +761,10 @@ class TorusMesh:
                 edges.append([self.coords(self.cr_cells[pairs[0]]), self.coords(self.cr_cells[pairs[1]])])
             lc = mc.LineCollection(edges, colors='r', linewidths=2, zorder=1)
             plt.gca().add_collection(lc)
-        plt.show()
+        if fname:
+            plt.savefig(fname)
+        else:
+            plt.draw()
 
 def test():
     """
