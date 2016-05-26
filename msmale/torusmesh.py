@@ -55,7 +55,7 @@ class TorusMesh:
         self.V = [None] * (4 * self.size)
         self.cr_id = np.zeros(4 * self.size, dtype=bool)
         self.idx_to_cidx = []
-        self.msgragh = None
+        self.msgraph = None
         self.arcs = []
 
     def set_values(self, val):
@@ -549,7 +549,7 @@ class TorusMesh:
                     if not cycles[s]:
                         cycles[s] = copy.deepcopy(curset)
                         cycles[i] = copy.deepcopy(curset)
-                        pairs.append((s, i, pers(s, i)))
+                        pairs.append((i, s, pers(i, s)))
                     else:
                         for b in re.finditer('1', cycles[s].to01()):  # 16:
                             idx = b.span()[0]
@@ -569,14 +569,65 @@ class TorusMesh:
                     if not cycles[s]:
                         cycles[s] = copy.deepcopy(curset)
                         cycles[i] = copy.deepcopy(curset)
-                        pairs.append((s, i, pers(s, i)))
+                        pairs.append((i, s, pers(i, s)))
                     else:
                         for b in re.finditer('1', cycles[s].to01()):  # 16:
                             idx = b.span()[0]
                             curset[idx] ^= 1  # bit flip operation
 
-        pairs.sort(key=lambda x: x[2])  # Сортируем пары по значению
+        pairs.sort(key=lambda x: x[2], reverse=True)  # Сортируем пары по убыванию значения
         self.ppairs = pairs
+
+    def eliminate_pair(self):
+        """
+        Сократить следующую по очерёдности персистентную пару.
+        :return:
+        """
+        # Если пар не осталось, то скоращать нечего.
+        if not self.ppairs:
+            print("Список персистентных пар пуст!")
+            return
+        # Первая клетка — седло, вторая — максимум или минимум.
+        pair = self.ppairs.pop()
+        saddle = pair[0]
+        if self.dim(self.cr_cells[saddle]) != 1:
+            raise AssertionError("Первая клетка пары должна быть седлом!")
+        extr = pair[1]
+        extr_dim = self.dim(self.cr_cells[extr])
+
+        # Изменение графа Морса-Смейла.
+        if extr_dim == 1:
+            raise AssertionError("Вторая клетка пары должна быть максимумом или минимумом!")
+        elif extr_dim == 0:
+            # Вторая клетка — минимум
+            saddles = [x for x in self.msgraph[extr] if x != saddle]  # Сёдла-соседи максимума (кроме седла из пары)
+            mins = self.get_min_neib_msgraph(saddle)
+            minimum = mins[0] if mins[0] != extr else mins[1]
+            for x in self.msgraph[saddle]:
+                self.msgraph[x].remove(saddle)
+            self.msgraph[saddle].clear()
+            for s in saddles:
+                # Добавляем рёбра из соседей максимума в другой максимум
+                self.msgraph[s].remove(extr)
+                self.msgraph[extr].append(s)
+                self.msgraph[s].append(minimum)
+                self.msgraph[minimum].append(s)
+            self.msgraph[extr].clear()
+
+        elif extr_dim == 2:
+            saddles = [x for x in self.msgraph[extr] if x != saddle]  # Сёдла-соседи максимума (кроме седла из пары)
+            maxs = self.get_max_neib_msgraph(saddle)
+            maximum = maxs[0] if maxs[0] != extr else maxs[1]
+            for x in self.msgraph[saddle]:
+                self.msgraph[x].remove(saddle)
+            self.msgraph[saddle].clear()
+            for s in saddles:
+                # Добавляем рёбра из соседей минимума в другой минимум
+                self.msgraph[s].remove(extr)
+                self.msgraph[extr].append(s)
+                self.msgraph[s].append(maximum)
+                self.msgraph[maximum].append(s)
+            self.msgraph[extr].clear()
 
     def print(self):
         print(self.values)
@@ -662,4 +713,8 @@ m.cmp_ms_graph()
 m.assign_labels()
 m.cmp_persistent_pairs()
 print(m.ppairs)
-m.draw(draw_arcs=True, draw_gradient=False, draw_crit_pts=True, annotate_crit_points=True, draw_persistence_pairs=True)
+m.draw(draw_arcs=False, draw_gradient=False, draw_crit_pts=True, annotate_crit_points=True, draw_persistence_pairs=False, draw_graph=True)
+for i in range(40):
+    print(i)
+    m.eliminate_pair()
+m.draw(draw_arcs=False, draw_gradient=False, draw_crit_pts=True, annotate_crit_points=True, draw_persistence_pairs=False, draw_graph=True)
