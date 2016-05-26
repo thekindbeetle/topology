@@ -281,7 +281,7 @@ class TorusMesh:
         facets = self.facets(idx)
         return [f for f in facets if f in s and self.is_unpaired(f)]
 
-    def add_gradient_arrow(self, start, end):
+    def set_gradient_arrow(self, start, end):
         """
         Добавляем стрелку градиента
         """
@@ -358,6 +358,18 @@ class TorusMesh:
         return star
 
     def cmp_discrete_gradient(self):
+        """
+        Реализация процедуры вычисления дискретного градиента по исходным данным.
+        Сюда включено вычисление критических клеток.
+        ProcessLowerStars
+        (Vanessa Robins)
+        :return:
+        """
+        self.cr_cells = []
+        self.V = [None] * (4 * self.size)
+        self.cr_id = np.zeros(4 * self.size, dtype=bool)
+        self.idx_to_cidx = None
+
         # Две вспомогательные кучи
         pq_zero = []
         pq_one = []
@@ -372,7 +384,7 @@ class TorusMesh:
                 self.set_critical(idx)  # Если значение в вершине меньше, чем во всех соседних, то она - минимум.
             else:
                 delta = lstar[0]  # Ребро с наименьшим значением
-                self.add_gradient_arrow(idx, delta)
+                self.set_gradient_arrow(idx, delta)
                 for i in range(1, len(lstar)):
                     if self.dim(lstar[i]) == 1:  # Остальные 1-клетки кладём в pq_zero
                         # Первое значение - ключ для сортировки кучи
@@ -390,10 +402,10 @@ class TorusMesh:
                             heapq.heappush(pq_zero, alpha)
                         else:
                             pair = unpair_facets[0]
-                            self.add_gradient_arrow(pair, alpha[1])
+                            self.set_gradient_arrow(pair, alpha[1])
                             # TODO: remove pair from pq_zero faster
                             pq_zero = [x for x in pq_zero if x[1] != pair]
-                            #pq_zero.remove((self.extvalue(pair), pair))
+                            # pq_zero.remove((self.extvalue(pair), pair))
                             heapq.heapify(pq_zero)
                             for beta in lstar:
                                 if len(self.unpaired_facets(beta, lstar)) == 1 and ((alpha in self.facets(beta)) or (pair in self.facets(beta))):
@@ -411,7 +423,29 @@ class TorusMesh:
         # Строим обратное отображение для списка критических точек
         self.idx_to_cidx = {self.cr_cells[cidx]: cidx for cidx in range(len(self.cr_cells))}
 
-    def cmp_ms_graph(self):
+    def cmp_crit_cells(self):
+        """
+        Вычисление критических клеток по градиенту.
+        ! Функция cmp_discrete_gradient вычисляет критические клетки по данным.
+        ! Здесь критические точки вычисляются не по данным, а по градиенту.
+        Если клетка не включена ни в одну стрелку градиента, то она критическая.
+        Проверка на корректность градиента не производится.
+        :return:
+        """
+        self.cr_cells = []
+        self.cr_id = np.ones(4 * self.size, dtype=bool)
+        for i in range(4 * self.size):
+            if self.V[i] is not None:
+                self.cr_id[i] = False
+        self.cr_cells = [idx for idx in range(4 * self.size) if self.cr_id[idx]]
+
+        # Сортируем клетки по возрастанию значения — получаем фильтрацию.
+        self.cr_cells.sort(key=lambda idx: self.extvalue(idx))
+
+        # Строим обратное отображение для списка критических точек
+        self.idx_to_cidx = {self.cr_cells[cidx]: cidx for cidx in range(len(self.cr_cells))}
+
+    def cmp_msgraph(self):
         """
         Вытаскиваем информацию о соседстве в MS-комплексе.
         На выходе - список, каждой критической клетке сопоставляется список её соседей в MS-графе.
@@ -448,6 +482,7 @@ class TorusMesh:
         Граф к моменту вызова функции должен быть вычислен.
         :return:
         """
+        self.arcs = []
         for s in self.cp(1): # Цикл по сёдлам
             # Вычисляем сепаратрисы седло-минимум
             vertices = self.verts(s)
@@ -578,9 +613,44 @@ class TorusMesh:
         pairs.sort(key=lambda x: x[2], reverse=True)  # Сортируем пары по убыванию значения
         self.ppairs = pairs
 
-    def eliminate_pair(self):
+    def eliminate_pair_revert_gradient(self):
         """
         Сократить следующую по очерёдности персистентную пару.
+        !При помощи разворота градиента!
+        На дуге разворачивается градиент.
+        :return:
+        """
+        # Если пар не осталось, то скоращать нечего.
+        if not self.ppairs:
+            print("Список персистентных пар пуст!")
+            return
+        # Первая клетка — седло, вторая — максимум или минимум.
+        pair = self.ppairs.pop()
+        saddle = self.cr_cells[pair[0]]
+        if self.dim(saddle) != 1:
+            raise AssertionError("Первая клетка пары должна быть седлом!")
+        extr = self.cr_cells[pair[1]]
+        extr_dim = self.dim(extr)
+        # Разворот градиента.
+        if extr_dim == 1:
+            raise AssertionError("Вторая клетка пары должна быть максимумом или минимумом!")
+        else:
+            # Ищем соответствующую дугу
+            curr_arcs = [arc for arc in self.arcs if arc[0] == saddle and arc[-1] == extr]
+            if len(curr_arcs) == 0:
+                raise RuntimeError("Дуга, соответствующая персистентной паре, не найдена!")
+            elif len(curr_arcs) >= 2:
+                raise RuntimeError("Дуга, соответствующая персистентной паре, должна быть ровно одна!")
+            arc = curr_arcs[0]
+            # Разворачиваем градиент вдоль дуги.
+            for i in range(0, len(arc), 2):
+                self.set_gradient_arrow(arc[i], arc[i + 1])
+
+
+    def eliminate_pair_change_msgraph(self):
+        """
+        Сократить следующую по очерёдности персистентную пару.
+        !Изменяется граф Морса-Смейла!
         :return:
         """
         # Если пар не осталось, то скоращать нечего.
@@ -613,7 +683,6 @@ class TorusMesh:
                 self.msgraph[s].append(minimum)
                 self.msgraph[minimum].append(s)
             self.msgraph[extr].clear()
-
         elif extr_dim == 2:
             saddles = [x for x in self.msgraph[extr] if x != saddle]  # Сёдла-соседи максимума (кроме седла из пары)
             maxs = self.get_max_neib_msgraph(saddle)
@@ -628,6 +697,7 @@ class TorusMesh:
                 self.msgraph[s].append(maximum)
                 self.msgraph[maximum].append(s)
             self.msgraph[extr].clear()
+        print("Pair {0} eliminated".format(pair))
 
     def print(self):
         print(self.values)
@@ -692,29 +762,31 @@ def test():
     m = TorusMesh(3, 3)
     m.set_values(field)
     m.cmp_discrete_gradient()
-    m.cmp_ms_graph()
+    m.cmp_msgraph()
     m.assign_labels()
     m.cmp_arcs()
     print(m._signs)
     m.draw(draw_gradient=False, draw_arcs=True, draw_graph=False)
 
-import generators.matern
-import msmale.field_generator
-
-centers = generators.matern.matern_point_process(0.5, 10, 3, 20)
-data = msmale.field_generator.gen_gaussian_sum_torus(20, 20, centers, 4)
-msmale.field_generator.perturb(data)
-m = TorusMesh(data.shape[0], data.shape[1])
-m.set_values(data)
-m.print()
-m.cmp_discrete_gradient()
-m.cmp_arcs()
-m.cmp_ms_graph()
-m.assign_labels()
-m.cmp_persistent_pairs()
-print(m.ppairs)
-m.draw(draw_arcs=False, draw_gradient=False, draw_crit_pts=True, annotate_crit_points=True, draw_persistence_pairs=False, draw_graph=True)
-for i in range(40):
-    print(i)
-    m.eliminate_pair()
-m.draw(draw_arcs=False, draw_gradient=False, draw_crit_pts=True, annotate_crit_points=True, draw_persistence_pairs=False, draw_graph=True)
+#
+# import generators.matern
+# import msmale.field_generator
+#
+# centers = generators.matern.matern_point_process(0.5, 10, 3, 20)
+# data = msmale.field_generator.gen_gaussian_sum_torus(20, 20, centers, 4)
+# msmale.field_generator.perturb(data)
+# m = TorusMesh(data.shape[0], data.shape[1])
+# m.set_values(data)
+# m.print()
+# m.cmp_discrete_gradient()
+# m.cmp_arcs()
+# m.cmp_ms_graph()
+# m.assign_labels()
+# m.cmp_persistent_pairs()
+# print(m.ppairs)
+# plt.ion()
+# m.draw(draw_arcs=False, draw_gradient=True, draw_crit_pts=True, annotate_crit_points=True, draw_persistence_pairs=True, draw_graph=False)
+# for i in range(5):
+#     m.eliminate_pair_revert_gradient()
+#     m.draw(draw_arcs=False, draw_gradient=True, draw_crit_pts=True, annotate_crit_points=True, draw_persistence_pairs=True, draw_graph=False)
+# plt.waitforbuttonpress()
