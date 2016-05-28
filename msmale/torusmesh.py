@@ -34,14 +34,8 @@ class TorusMesh:
     # Список персистентных пар
     ppairs = []
 
-    # Обратное отображение для списка критических точек
-    idx_to_cidx = []
-
     # Граф Морса-Смейла
     msgraph = None
-
-    # Метки критических клеток (негативная / позитивная)
-    _signs = None
 
     # Дуги комплекса Морса-Смейла
     arcs = []
@@ -54,7 +48,6 @@ class TorusMesh:
         self.cr_cells = []
         self.V = [None] * (4 * self.size)
         self.cr_id = np.zeros(4 * self.size, dtype=bool)
-        self.idx_to_cidx = []
         self.msgraph = None
         self.arcs = []
 
@@ -83,13 +76,13 @@ class TorusMesh:
         """
         return [p for p in self.cr_cells if self.dim(p) == morse_index]
 
-    def to_index(self, x, y):
+    def _to_index(self, x, y):
         """
         Глобальный индекс вершины по координатам сетки.
         """
         return x * self.sizeY + y
 
-    def coords(self, idx):
+    def _coords(self, idx):
         """
         Координаты центра клетки (вершины, ребра или ячейки)
         X и Y меняем местами!
@@ -97,93 +90,93 @@ class TorusMesh:
         if idx < self.size:
             return self.coordy(idx), self.coordx(idx)
         elif idx < self.size * 2:
-            return self.coordy(self.verts(idx)[0]), self.coordx(self.verts(idx)[0]) + 0.5
+            return self.coordy(self._verts(idx)[0]), self.coordx(self._verts(idx)[0]) + 0.5
         elif idx < self.size * 3:
-            return self.coordy(self.verts(idx)[0]) + 0.5, self.coordx(self.verts(idx)[0])
+            return self.coordy(self._verts(idx)[0]) + 0.5, self.coordx(self._verts(idx)[0])
         else:
-            return self.coordy(self.verts(idx)[0]) + 0.5, self.coordx(self.verts(idx)[0]) + 0.5
+            return self.coordy(self._verts(idx)[0]) + 0.5, self.coordx(self._verts(idx)[0]) + 0.5
 
-    def vleft(self, idx):
+    def _vleft(self, idx):
         """
         Левый сосед вершины с заданным индексом
         """
         return idx - idx % self.sizeX + (idx + self.sizeX - 1) % self.sizeX
 
-    def vright(self, idx):
+    def _vright(self, idx):
         """
         Правый сосед вершины с заданным индексом
         """
         return idx - idx % self.sizeX + (idx + 1) % self.sizeX
 
-    def vtop(self, idx):
+    def _vtop(self, idx):
         """
         Верхний сосед вершины с заданным индексом
         """
         return (idx + self.size - self.sizeX) % self.size
 
-    def vbottom(self, idx):
+    def _vbottom(self, idx):
         """
         Нижний сосед вершины с заданным индексом
         """
         return (idx + self.sizeX) % self.size
 
-    def eleft(self, idx):
+    def _eleft(self, idx):
         """
         Левое инцидентное ребро для вершины с данным индексом
         :return: глобальный индекс ребра
         """
-        return self.size + self.vleft(idx)
+        return self.size + self._vleft(idx)
 
-    def eright(self, idx):
+    def _eright(self, idx):
         """
         Правое инцидентное ребро для вершины с данным индексом
         :return: глобальный индекс ребра
         """
         return self.size + idx
 
-    def etop(self, idx):
+    def _etop(self, idx):
         """
         Верхнее инцидентное ребро для вершины с данным индексом
         :return: глобальный индекс ребра
         """
-        return self.size * 2 + self.vtop(idx)
+        return self.size * 2 + self._vtop(idx)
 
-    def ebottom(self, idx):
+    def _ebottom(self, idx):
         """
         Нижнее инцидентное ребро для вершины с данным индексом
         :return: глобальный индекс ребра
         """
         return self.size * 2 + idx
 
-    def flefttop(self, idx):
+    def _flefttop(self, idx):
         """
         Левая-верхняя инцидентная ячейка для вершины с данным индексом
         :return: глобальный индекс ячейки
         """
-        return self.size * 3 + self.vtop(self.vleft(idx))
+        return self.size * 3 + self._vtop(self._vleft(idx))
 
-    def fleftbottom(self, idx):
+    def _fleftbottom(self, idx):
         """
         Левая-нижняя инцидентная ячейка для вершины с данным индексом
         :return: глобальный индекс ячейки
         """
-        return self.size * 3 + self.vleft(idx)
+        return self.size * 3 + self._vleft(idx)
 
-    def frighttop(self, idx):
+    def _frighttop(self, idx):
         """
         Правая-верхняя инцидентная ячейка для вершины с данным индексом
         :return: глобальный индекс ячейки
         """
-        return self.size * 3 + self.vtop(idx)
+        return self.size * 3 + self._vtop(idx)
 
-    def frightbottom(self, idx):
+    def _frightbottom(self, idx):
         """
         Правая-нижняя инцидентная ячейка для вершины с данным индексом
         :return: глобальный индекс ячейки
         """
         return self.size * 3 + idx
 
-    def facets(self, idx):
+    def _facets(self, idx):
         """
         @tested
         Гиперграни ячейки с данным индексом
@@ -191,12 +184,12 @@ class TorusMesh:
         if self.dim(idx) == 2:
             tmp_idx = idx - 3 * self.size  # индекс верхней левой вершины
             # верхнее, левое, нижнее, правое
-            return self.size + tmp_idx, 2 * self.size + tmp_idx, self.size + self.vbottom(
-                tmp_idx), 2 * self.size + self.vright(tmp_idx)
+            return self.size + tmp_idx, 2 * self.size + tmp_idx, self.size + self._vbottom(
+                tmp_idx), 2 * self.size + self._vright(tmp_idx)
         else:
-            return self.verts(idx)
+            return self._verts(idx)
 
-    def cofacets(self, idx):
+    def _cofacets(self, idx):
         """
         @tested
         Пара инцидентных ребру IDX клеток
@@ -206,12 +199,12 @@ class TorusMesh:
             raise AssertionError("Morse index must be 1!")
         if idx < 2 * self.size:  # горизонтальное ребро
             tmp_idx = idx - self.size
-            return 3 * self.size + self.vtop(tmp_idx), 3 * self.size + tmp_idx
+            return 3 * self.size + self._vtop(tmp_idx), 3 * self.size + tmp_idx
         else:  # вертикальное ребро
             tmp_idx = idx - 2 * self.size
-            return 3 * self.size + self.vleft(tmp_idx), 3 * self.size + tmp_idx
+            return 3 * self.size + self._vleft(tmp_idx), 3 * self.size + tmp_idx
 
-    def verts(self, idx):
+    def _verts(self, idx):
         """
         @tested
         Множество вершин клетки
@@ -219,19 +212,19 @@ class TorusMesh:
         if idx < self.size:
             return idx,
         elif idx < 2 * self.size:
-            return idx - self.size, self.vright(idx - self.size)
+            return idx - self.size, self._vright(idx - self.size)
         elif idx < 3 * self.size:
-            return idx - 2 * self.size, self.vbottom(idx - 2 * self.size)
+            return idx - 2 * self.size, self._vbottom(idx - 2 * self.size)
         else:
-            return idx - 3 * self.size, self.vright(idx - 3 * self.size), \
-                   self.vbottom(self.vright(idx - 3 * self.size)), self.vbottom(idx - 3 * self.size)
+            return idx - 3 * self.size, self._vright(idx - 3 * self.size), \
+                   self._vbottom(self._vright(idx - 3 * self.size)), self._vbottom(idx - 3 * self.size)
 
-    def extvalue(self, idx):
+    def _extvalue(self, idx):
         """
         Расширенное значение по глобальному индексу клетки.
         Значения в вершинах клетки по убыванию.
         """
-        v = self.verts(idx)
+        v = self._verts(idx)
         return tuple(sorted([self.value(v[i]) for i in range(len(v))], reverse=True))
 
     def coordx(self, idx):
@@ -278,7 +271,7 @@ class TorusMesh:
         данной 1- или 2-клетки,
         принадлежащих множеству s
         """
-        facets = self.facets(idx)
+        facets = self._facets(idx)
         return [f for f in facets if f in s and self.is_unpaired(f)]
 
     def set_gradient_arrow(self, start, end):
@@ -288,28 +281,27 @@ class TorusMesh:
         self.V[start] = end
         self.V[end] = start
 
-    def get_min_neib_msgraph(self, idx):
+    def get_min_neib_msgraph(self, cidx):
         """
         Соседи-минимумы седла в МС-графе.
-        Выводятся индексы в списке crit_cells.
         :return:
         """
-        if self.dim(self.cr_cells[idx]) != 1:
+        if self.dim(cidx) != 1:
             raise AssertionError("Функция get_min_neib_msgraph должна вызываться с аргументом-седлом")
-        result = [cell for cell in self.msgraph[idx] if self.dim(self.cr_cells[cell]) == 0]
+        result = [cell for cell in self.msgraph[cidx] if self.dim(cell) == 0]
         if len(result) != 2:
             raise ValueError("Ошибка: у седла должны быть ровно два соседа-минимума!")
         return result
 
-    def get_max_neib_msgraph(self, idx):
+    def get_max_neib_msgraph(self, cidx):
         """
         Соседи-максимумы седла в МС-графе.
         Выводятся индексы в списке crit_cells.
         :return:
         """
-        if self.dim(self.cr_cells[idx]) != 1:
+        if self.dim(cidx) != 1:
             raise AssertionError("Функция get_min_neib_msgraph должна вызываться с аргументом-седлом")
-        result = [cell for cell in self.msgraph[idx] if self.dim(self.cr_cells[cell]) == 2]
+        result = [cell for cell in self.msgraph[cidx] if self.dim(cell) == 2]
         if len(result) != 2:
             raise ValueError("Ошибка: у седла должны быть ровно два соседа-максимума!")
         return result
@@ -319,8 +311,8 @@ class TorusMesh:
         Звезда вершины idx
         :return: набор клеток звезды, содержащих данную вершину
         """
-        return [self.eright(idx), self.etop(idx), self.eleft(idx), self.ebottom(idx),
-                self.frighttop(idx), self.flefttop(idx), self.fleftbottom(idx), self.frightbottom(idx)]
+        return [self._eright(idx), self._etop(idx), self._eleft(idx), self._ebottom(idx),
+                self._frighttop(idx), self._flefttop(idx), self._fleftbottom(idx), self._frightbottom(idx)]
 
     def lower_star(self, idx):
         """
@@ -329,32 +321,32 @@ class TorusMesh:
         :return:
         """
         v = self.value(idx)
-        is_left_lower = self.value(self.vleft(idx)) < v
-        is_top_lower = self.value(self.vtop(idx)) < v
-        is_right_lower = self.value(self.vright(idx)) < v
-        is_bottom_lower = self.value(self.vbottom(idx)) < v
-        is_left_bottom_lower = self.value(self.vleft(self.vbottom(idx))) < v
-        is_right_bottom_lower = self.value(self.vright(self.vbottom(idx))) < v
-        is_left_top_lower = self.value(self.vleft(self.vtop(idx))) < v
-        is_right_top_lower = self.value(self.vright(self.vtop(idx))) < v
+        is_left_lower = self.value(self._vleft(idx)) < v
+        is_top_lower = self.value(self._vtop(idx)) < v
+        is_right_lower = self.value(self._vright(idx)) < v
+        is_bottom_lower = self.value(self._vbottom(idx)) < v
+        is_left_bottom_lower = self.value(self._vleft(self._vbottom(idx))) < v
+        is_right_bottom_lower = self.value(self._vright(self._vbottom(idx))) < v
+        is_left_top_lower = self.value(self._vleft(self._vtop(idx))) < v
+        is_right_top_lower = self.value(self._vright(self._vtop(idx))) < v
         star = []
         if is_left_lower:
-            star.append(self.eleft(idx))
+            star.append(self._eleft(idx))
         if is_top_lower:
-            star.append(self.etop(idx))
+            star.append(self._etop(idx))
         if is_right_lower:
-            star.append(self.eright(idx))
+            star.append(self._eright(idx))
         if is_bottom_lower:
-            star.append(self.ebottom(idx))
+            star.append(self._ebottom(idx))
         if is_left_lower and is_top_lower and is_left_top_lower:
-            star.append(self.flefttop(idx))
+            star.append(self._flefttop(idx))
         if is_right_lower and is_top_lower and is_right_top_lower:
-            star.append(self.frighttop(idx))
+            star.append(self._frighttop(idx))
         if is_left_lower and is_bottom_lower and is_left_bottom_lower:
-            star.append(self.fleftbottom(idx))
+            star.append(self._fleftbottom(idx))
         if is_right_lower and is_bottom_lower and is_right_bottom_lower:
-            star.append(self.frightbottom(idx))
-        star.sort(key=(lambda x: self.extvalue(x)))
+            star.append(self._frightbottom(idx))
+        star.sort(key=(lambda x: self._extvalue(x)))
         return star
 
     def cmp_discrete_gradient(self):
@@ -368,7 +360,6 @@ class TorusMesh:
         self.cr_cells = []
         self.V = [None] * (4 * self.size)
         self.cr_id = np.zeros(4 * self.size, dtype=bool)
-        self.idx_to_cidx = None
 
         # Две вспомогательные кучи
         pq_zero = []
@@ -388,12 +379,12 @@ class TorusMesh:
                 for i in range(1, len(lstar)):
                     if self.dim(lstar[i]) == 1:  # Остальные 1-клетки кладём в pq_zero
                         # Первое значение - ключ для сортировки кучи
-                        heapq.heappush(pq_zero, (self.extvalue(lstar[i]), lstar[i]))
+                        heapq.heappush(pq_zero, (self._extvalue(lstar[i]), lstar[i]))
                 # Ко-грани ребра delta
-                cf = self.cofacets(delta)
+                cf = self._cofacets(delta)
                 for f in cf:
                     if (f in lstar) and (len(self.unpaired_facets(f, lstar)) == 1):
-                        heapq.heappush(pq_one, (self.extvalue(f), f))
+                        heapq.heappush(pq_one, (self._extvalue(f), f))
                 while pq_one or pq_zero:
                     while pq_one:
                         alpha = heapq.heappop(pq_one)
@@ -408,20 +399,17 @@ class TorusMesh:
                             # pq_zero.remove((self.extvalue(pair), pair))
                             heapq.heapify(pq_zero)
                             for beta in lstar:
-                                if len(self.unpaired_facets(beta, lstar)) == 1 and ((alpha in self.facets(beta)) or (pair in self.facets(beta))):
-                                    heapq.heappush(pq_one, (self.extvalue(beta), beta))
+                                if len(self.unpaired_facets(beta, lstar)) == 1 and ((alpha in self._facets(beta)) or (pair in self._facets(beta))):
+                                    heapq.heappush(pq_one, (self._extvalue(beta), beta))
                     if pq_zero:
                         gamma = heapq.heappop(pq_zero)
                         self.set_critical(gamma[1])
                         for a in lstar:
-                            if (gamma[1] in self.facets(a)) and (len(self.unpaired_facets(a, lstar)) == 1):
-                                heapq.heappush(pq_one, (self.extvalue(a), a))
+                            if (gamma[1] in self._facets(a)) and (len(self.unpaired_facets(a, lstar)) == 1):
+                                heapq.heappush(pq_one, (self._extvalue(a), a))
 
         # Сортируем клетки по возрастанию значения — получаем фильтрацию.
-        self.cr_cells.sort(key=lambda idx: self.extvalue(idx))
-
-        # Строим обратное отображение для списка критических точек
-        self.idx_to_cidx = {self.cr_cells[cidx]: cidx for cidx in range(len(self.cr_cells))}
+        self.cr_cells.sort(key=lambda idx: self._extvalue(idx))
 
     def cmp_crit_cells(self):
         """
@@ -440,39 +428,35 @@ class TorusMesh:
         self.cr_cells = [idx for idx in range(4 * self.size) if self.cr_id[idx]]
 
         # Сортируем клетки по возрастанию значения — получаем фильтрацию.
-        self.cr_cells.sort(key=lambda idx: self.extvalue(idx))
-
-        # Строим обратное отображение для списка критических точек
-        self.idx_to_cidx = {self.cr_cells[cidx]: cidx for cidx in range(len(self.cr_cells))}
+        self.cr_cells.sort(key=lambda idx: self._extvalue(idx))
 
     def cmp_msgraph(self):
         """
         Вытаскиваем информацию о соседстве в MS-комплексе.
         На выходе - список, каждой критической клетке сопоставляется список её соседей в MS-графе.
         """
-        self.msgraph = [[] for i in range(len(self.cr_cells))]
+        self.msgraph = {cell: [] for cell in self.cr_cells}
 
         q = deque()
 
         for dimension in (1, 2):
-            for idx in self.cp(dimension):
-                cidx = self.idx_to_cidx[idx]  # Индекс в списке критических точек
-                g = self.facets(idx)
+            for cidx in self.cp(dimension):
+                g = self._facets(cidx)
                 for face in g:
                     if self.is_critical(face):
-                        self.msgraph[cidx].append(self.idx_to_cidx[face])
-                        self.msgraph[self.idx_to_cidx[face]].append(cidx)
+                        self.msgraph[cidx].append(face)
+                        self.msgraph[face].append(cidx)
                     elif self.V[face] > face:  # То есть есть стрелка, и она выходит (а не входит)
                         q.appendleft(face)
                 while q:
                     a = q.pop()
                     b = self.V[a]
-                    for face in self.facets(b):
+                    for face in self._facets(b):
                         if face == a:
                             continue  # Возвращаться нельзя
                         if self.is_critical(face):
-                            self.msgraph[cidx].append(self.idx_to_cidx[face])
-                            self.msgraph[self.idx_to_cidx[face]].append(cidx)
+                            self.msgraph[cidx].append(face)
+                            self.msgraph[face].append(cidx)
                         elif self.V[face] > face:
                             q.appendleft(face)
 
@@ -485,7 +469,7 @@ class TorusMesh:
         self.arcs = []
         for s in self.cp(1): # Цикл по сёдлам
             # Вычисляем сепаратрисы седло-минимум
-            vertices = self.verts(s)
+            vertices = self._verts(s)
 
             for cur_v in vertices:
                 # Идём в двух возможных направлениях
@@ -496,7 +480,7 @@ class TorusMesh:
                 while not self.is_critical(cur_v):
                     # Идём вдоль интегральной линии
                     cur_e = self.V[cur_v]
-                    v = self.verts(cur_e)
+                    v = self._verts(cur_e)
                     # Выбираем путь вперёд (в ещё не пройденную клетку)
                     cur_v = v[1] if v[0] == cur_v else v[0]
                     separx.append(cur_e)
@@ -504,7 +488,7 @@ class TorusMesh:
                 self.arcs.append(separx)
 
             # Вычисляем сепаратрисы седло-максимум
-            faces = self.cofacets(s)
+            faces = self._cofacets(s)
 
             # Идём в двух возможных направлениях
             for cur_f in faces:
@@ -513,55 +497,57 @@ class TorusMesh:
                 while not self.is_critical(cur_f):
                     # Идём вдоль интегральной линии
                     cur_e = self.V[cur_f]
-                    f = self.cofacets(cur_e)
+                    f = self._cofacets(cur_e)
                     # Выбираем путь вперёд (в ещё не пройденную клетку)
                     cur_f = f[1] if f[0] == cur_f else f[0]
                     separx.append(cur_e)
                     separx.append(cur_f)
                 self.arcs.append(separx)
 
-    def assign_labels(self):
+    def cmp_persistent_pairs(self):
         """
-        Пометить критические клетки как негативные (создающие цикл) или позитивные (убивающие цикл).
+        Вычисление персистентных пар.
         :return:
         """
-        # Инициализация массива отметок
-        self._signs = bitarray(len(self.cr_cells))
+        ccnum = len(self.cr_cells) # Количество критических клеток
 
-        uf = msmale.unionfind.UnionFind(len(self.cr_cells))
+        # Помечаем критические клетки как негативные (создающие цикл) или позитивные (убивающие цикл).
+        # Метки критических клеток (негативная / позитивная)
+        signs = bitarray(ccnum)
+
+        # Строим отображение критических точек в индекс битового массива меток
+        idx_reverse = {self.cr_cells[cidx]: cidx for cidx in range(len(self.cr_cells))}
+
+        uf = msmale.unionfind.UnionFind(ccnum)
 
         # Cчитаем, что к этому моменту массив критических точек представляет собой фильтрацию.
         for i in range(len(self.cr_cells)):
-            cc = self.cr_cells[i]
-            dim = self.dim(cc)  # размерность критической клетки
+            cidx = self.cr_cells[i]
+            dim = self.dim(cidx)  # размерность критической клетки
             uf.makeset(i)
             if dim == 0:
-                self._signs[i] = 1 # все минимумы - позитивные
+                signs[i] = 1 # все минимумы - позитивные
             elif dim == 1:
                 # находим двух соседей в ms-комплексе, которые являются минимумами
                 # у каждого седла два соседа-минимума и два соседа-максимума
-                neighbours = self.get_min_neib_msgraph(i)  # соседи-минимумы в графе ms-комплекса
-                if uf.find(neighbours[0]) == uf.find(neighbours[1]):
-                    self._signs[i] = 1  # седло порождает 1-цикл
+                neighbours = self.get_min_neib_msgraph(cidx)  # соседи-минимумы в графе ms-комплекса
+                if uf.find(idx_reverse[neighbours[0]]) == uf.find(idx_reverse[neighbours[1]]):
+                    signs[i] = 1  # седло порождает 1-цикл
                 else:
-                    self._signs[i] = 0  # седло убивает 0-цикл
-                uf.union(neighbours[0], neighbours[1])  # Объединяем компоненты связности
+                    signs[i] = 0  # седло убивает 0-цикл
+                uf.union(idx_reverse[neighbours[0]], idx_reverse[neighbours[1]])  # Объединяем компоненты связности
             else:
-                self._signs[i] = 0  # все максимумы - негативные
+                signs[i] = 0  # все максимумы - негативные
 
-    def cmp_persistent_pairs(self):
-        """
-        Вычисление персистентных пар
-        :return:
-        """
+        # Собственно, вычисление персистентных пар.
         # Несортированный массив персистентных пар
         pairs = []
 
         # список циклов
         # каждый цикл соответствует негативной клетке
-        cycles = [None] * len(self.cr_cells)
+        cycles = [None] * ccnum
 
-        curset = len(self.cr_cells) * bitarray('0')
+        curset = ccnum * bitarray('0')
 
         # Последнее вхождение единицы в битовый массив (если её нет — ValueError)
         get_highest_of = lambda bitset: bitset.to01().rindex('1')
@@ -570,21 +556,21 @@ class TorusMesh:
         get_lowest_of = lambda bitset: bitset.to01().index('1')
 
         # Персистентность пары
-        pers = lambda idx1, idx2: np.abs(np.mean(self.extvalue(self.cr_cells[idx1])) - np.mean(self.extvalue(self.cr_cells[idx2])))
+        pers = lambda cidx1, cidx2: np.abs(np.mean(self._extvalue(cidx1)) - np.mean(self._extvalue(cidx2)))
 
         # проходим по прямой фильтрации
-        for i in range(len(self.cr_cells)):
-            cc = self.cr_cells[i]
+        for i in range(ccnum):
+            cidx = self.cr_cells[i]
             # Смотрим только негативные сёдла
-            if self.dim(cc) == 1 and not self._signs[i]:
-                for neib in self.get_min_neib_msgraph(i):
-                    curset[neib] = True   # 5:
+            if self.dim(cidx) == 1 and not signs[i]:
+                for neib in self.get_min_neib_msgraph(cidx):
+                    curset[idx_reverse[neib]] = True   # 5:
                 while curset.count() > 0:
                     s = get_highest_of(curset)  # 9:
                     if not cycles[s]:
                         cycles[s] = copy.deepcopy(curset)
                         cycles[i] = copy.deepcopy(curset)
-                        pairs.append((i, s, pers(i, s)))
+                        pairs.append((self.cr_cells[i], self.cr_cells[s], pers(self.cr_cells[i], self.cr_cells[s])))
                     else:
                         for b in re.finditer('1', cycles[s].to01()):  # 16:
                             idx = b.span()[0]
@@ -593,18 +579,18 @@ class TorusMesh:
         curset = len(self.cr_cells) * bitarray('0')
 
         # проходим по обратной фильтрации
-        for i in reversed(range(len(self.cr_cells))):
-            cc = self.cr_cells[i]
+        for i in reversed(range(ccnum)):
+            cidx = self.cr_cells[i]
             # Смотрим только позитивные сёдла
-            if self.dim(cc) == 1 and self._signs[i]:
-                for neib in self.get_max_neib_msgraph(i):
-                    curset[neib] = True
+            if self.dim(cidx) == 1 and signs[i]:
+                for neib in self.get_max_neib_msgraph(cidx):
+                    curset[idx_reverse[neib]] = True
                 while curset.count() > 0:
                     s = get_lowest_of(curset)
                     if not cycles[s]:
                         cycles[s] = copy.deepcopy(curset)
                         cycles[i] = copy.deepcopy(curset)
-                        pairs.append((i, s, pers(i, s)))
+                        pairs.append((self.cr_cells[i], self.cr_cells[s], pers(self.cr_cells[i], self.cr_cells[s])))
                     else:
                         for b in re.finditer('1', cycles[s].to01()):  # 16:
                             idx = b.span()[0]
@@ -721,7 +707,7 @@ class TorusMesh:
             edges = []
             for cidx in range(len(self.cr_cells)):
                 for cidx2 in self.msgraph[cidx]:
-                    edges.append([self.coords(self.cr_cells[cidx]), self.coords(self.cr_cells[cidx2])])
+                    edges.append([self._coords(self.cr_cells[cidx]), self._coords(self.cr_cells[cidx2])])
             lc = mc.LineCollection(edges, colors='k', linewidths=2, zorder=1)
             plt.gca().add_collection(lc)
         if draw_gradient:
@@ -730,8 +716,8 @@ class TorusMesh:
                 if self.V[idx] is None:
                     continue
                 if idx < self.V[idx]:
-                    start = self.coords(idx)
-                    end = self.coords(self.V[idx])
+                    start = self._coords(idx)
+                    end = self._coords(self.V[idx])
                     if start[0] != 0 and end[0] != 0 and start[1] != 0 and end[1] != 0:
                         x.append(start[0])
                         y.append(start[1])
@@ -742,29 +728,30 @@ class TorusMesh:
             edges = []
             for arc in self.arcs:
                 for idx in range(len(arc) - 1):
-                    edge = [self.coords(arc[idx]), self.coords(arc[idx + 1])]
+                    edge = [self._coords(arc[idx]), self._coords(arc[idx + 1])]
                     if np.abs(edge[0][0] - edge[1][0]) < 1 and np.abs(edge[0][1] - edge[1][1]) < 1:
-                        edges.append([self.coords(arc[idx]), self.coords(arc[idx + 1])])
+                        edges.append([self._coords(arc[idx]), self._coords(arc[idx + 1])])
             lc = mc.LineCollection(edges, colors='k', linewidths=1, zorder=1)
             plt.gca().add_collection(lc)
         if draw_crit_pts:
-            plt.scatter([self.coords(p)[0] for p in self.cp(0)], [self.coords(p)[1] for p in self.cp(0)], zorder=2, c='b', s=50)
-            plt.scatter([self.coords(p)[0] for p in self.cp(1)], [self.coords(p)[1] for p in self.cp(1)], zorder=2, c='g', s=50)
-            plt.scatter([self.coords(p)[0] for p in self.cp(2)], [self.coords(p)[1] for p in self.cp(2)], zorder=2, c='r', s=50)
+            plt.scatter([self._coords(p)[0] for p in self.cp(0)], [self._coords(p)[1] for p in self.cp(0)], zorder=2, c='b', s=50)
+            plt.scatter([self._coords(p)[0] for p in self.cp(1)], [self._coords(p)[1] for p in self.cp(1)], zorder=2, c='g', s=50)
+            plt.scatter([self._coords(p)[0] for p in self.cp(2)], [self._coords(p)[1] for p in self.cp(2)], zorder=2, c='r', s=50)
         if annotate_crit_points:
-            for cidx in range(len(self.cr_cells)):
-                p = self.cr_cells[cidx]
-                plt.text(self.coords(p)[0], self.coords(p)[1], str(cidx))
+            for cidx in self.cr_cells:
+                plt.text(self._coords(cidx)[0], self._coords(cidx)[1], str(cidx))
         if draw_persistence_pairs:
             edges = []
             for pairs in self.ppairs:
-                edges.append([self.coords(self.cr_cells[pairs[0]]), self.coords(self.cr_cells[pairs[1]])])
+                edges.append([self._coords(pairs[0]), self._coords(pairs[1])])
             lc = mc.LineCollection(edges, colors='r', linewidths=2, zorder=1)
             plt.gca().add_collection(lc)
         if fname:
             plt.savefig(fname)
+            plt.close()
         else:
             plt.draw()
+            plt.show()
 
 def test():
     """
@@ -777,12 +764,10 @@ def test():
     m.set_values(field)
     m.cmp_discrete_gradient()
     m.cmp_msgraph()
-    m.assign_labels()
     m.cmp_arcs()
-    print(m._signs)
     m.draw(draw_gradient=False, draw_arcs=True, draw_graph=False)
 
-#
+
 # import generators.matern
 # import msmale.field_generator
 #
@@ -794,9 +779,9 @@ def test():
 # m.print()
 # m.cmp_discrete_gradient()
 # m.cmp_arcs()
-# m.cmp_ms_graph()
-# m.assign_labels()
+# m.cmp_msgraph()
 # m.cmp_persistent_pairs()
+# m.draw(draw_arcs=True, draw_gradient=False, draw_crit_pts=True, annotate_crit_points=True, draw_persistence_pairs=True, draw_graph=False)
 # print(m.ppairs)
 # plt.ion()
 # m.draw(draw_arcs=False, draw_gradient=True, draw_crit_pts=True, annotate_crit_points=True, draw_persistence_pairs=True, draw_graph=False)
