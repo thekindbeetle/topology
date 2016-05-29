@@ -292,6 +292,14 @@ class TorusMesh:
         """
         self.arcs.remove(self.find_arc(start_idx, end_idx, check_unique=True))
 
+    def remove_arcs_from_saddle(self, start_idx):
+        """
+        Удаление всех дуг из данного седла.
+        :param start_idx: Индекс седла.
+        :return:
+        """
+        self.arcs = [arc for arc in self.arcs if arc[0] != start_idx]
+
     def is_unpaired(self, idx):
         """
         Проверяем, является ли клетка спаренной или помеченной как критическая
@@ -495,6 +503,48 @@ class TorusMesh:
                         elif self.V[face] > face:
                             q.appendleft(face)
 
+    def _cmp_arcs(self, s):
+        """
+        Вычислить все дуги, следующие из некоторого седла.
+        :param s: Индекс седла.
+        :return:
+        """
+        # Вычисляем сепаратрисы седло-минимум
+        vertices = self._verts(s)
+
+        for cur_v in vertices:
+            # Идём в двух возможных направлениях
+            cur_e = s
+            separx = [cur_e, cur_v]  # Новая сепаратриса
+            # Идём по сепаратрисе, пока не встретим критическую клетку
+
+            while not self.is_critical(cur_v):
+                # Идём вдоль интегральной линии
+                cur_e = self.V[cur_v]
+                v = self._verts(cur_e)
+                # Выбираем путь вперёд (в ещё не пройденную клетку)
+                cur_v = v[1] if v[0] == cur_v else v[0]
+                separx.append(cur_e)
+                separx.append(cur_v)
+            self.arcs.append(separx)
+
+        # Вычисляем сепаратрисы седло-максимум
+        faces = self._cofacets(s)
+
+        # Идём в двух возможных направлениях
+        for cur_f in faces:
+            cur_e = s
+            separx = [cur_e, cur_f] # Новая сепаратриса
+            while not self.is_critical(cur_f):
+                # Идём вдоль интегральной линии
+                cur_e = self.V[cur_f]
+                f = self._cofacets(cur_e)
+                # Выбираем путь вперёд (в ещё не пройденную клетку)
+                cur_f = f[1] if f[0] == cur_f else f[0]
+                separx.append(cur_e)
+                separx.append(cur_f)
+            self.arcs.append(separx)
+
     def cmp_arcs(self):
         """
         Вычисляем сепаратрисы MS-комплекса.
@@ -502,41 +552,7 @@ class TorusMesh:
         """
         self.arcs = []
         for s in self.cp(1): # Цикл по сёдлам
-            # Вычисляем сепаратрисы седло-минимум
-            vertices = self._verts(s)
-
-            for cur_v in vertices:
-                # Идём в двух возможных направлениях
-                cur_e = s
-                separx = [cur_e, cur_v]  # Новая сепаратриса
-                # Идём по сепаратрисе, пока не встретим критическую клетку
-
-                while not self.is_critical(cur_v):
-                    # Идём вдоль интегральной линии
-                    cur_e = self.V[cur_v]
-                    v = self._verts(cur_e)
-                    # Выбираем путь вперёд (в ещё не пройденную клетку)
-                    cur_v = v[1] if v[0] == cur_v else v[0]
-                    separx.append(cur_e)
-                    separx.append(cur_v)
-                self.arcs.append(separx)
-
-            # Вычисляем сепаратрисы седло-максимум
-            faces = self._cofacets(s)
-
-            # Идём в двух возможных направлениях
-            for cur_f in faces:
-                cur_e = s
-                separx = [cur_e, cur_f] # Новая сепаратриса
-                while not self.is_critical(cur_f):
-                    # Идём вдоль интегральной линии
-                    cur_e = self.V[cur_f]
-                    f = self._cofacets(cur_e)
-                    # Выбираем путь вперёд (в ещё не пройденную клетку)
-                    cur_f = f[1] if f[0] == cur_f else f[0]
-                    separx.append(cur_e)
-                    separx.append(cur_f)
-                self.arcs.append(separx)
+            self._cmp_arcs(s)
 
     def cmp_persistent_pairs(self):
         """
@@ -637,7 +653,9 @@ class TorusMesh:
         """
         Сократить следующую по очерёдности персистентную пару.
         !При помощи разворота градиента!
-        На дуге разворачивается градиент.
+        На сокращаемой дуге разворачивается градиент, затем удаляются дуги, следующие из удалённого седла;
+        производится локальный пересчёт дуг по новому градиенту.
+        Вручную исправляются записи в МС-графе, удаляются критические точки из пары.
         :return:
         """
         # Если пар не осталось, то скоращать нечего.
@@ -651,64 +669,34 @@ class TorusMesh:
             raise AssertionError("Первая клетка пары должна быть седлом!")
         extr = pair[1]
         extr_dim = self.dim(extr)
+        saddles = [x for x in self.msgraph[extr] if x != saddle]  # Сёдла-соседи экстремума (кроме седла из пары)
+        # Минимумы (максимумы) - соседи седла
+        mins_or_maxs = self.get_min_neib_msgraph(saddle) if extr_dim == 0 else self.get_max_neib_msgraph(saddle)
+        # Вторая клетка-минимум (максимум)
+        min_or_max = mins_or_maxs[0] if mins_or_maxs[0] != extr else mins_or_maxs[1]
         # Разворот градиента.
         if extr_dim == 1:
             raise AssertionError("Вторая клетка пары должна быть максимумом или минимумом!")
-        else:
-            arc = self.find_arc(saddle, extr, check_unique=True)
-            # Разворачиваем градиент вдоль дуги.
-            for i in range(0, len(arc), 2):
-                self.set_gradient_arrow(arc[i], arc[i + 1])
-
-    def eliminate_pair_change_msgraph(self):
-        """
-        Сократить следующую по очерёдности персистентную пару.
-        !Изменяется граф Морса-Смейла!
-        :return:
-        """
-        # Если пар не осталось, то скоращать нечего.
-        if not self.ppairs:
-            print("Список персистентных пар пуст!")
-            return
-        # Первая клетка — седло, вторая — максимум или минимум.
-        pair = self.ppairs.pop()
-        saddle = pair[0]
-        if self.dim(saddle) != 1:
-            raise AssertionError("Первая клетка пары должна быть седлом!")
-        extr = pair[1]
-        extr_dim = self.dim(extr)
-
-        # Изменение графа Морса-Смейла.
-        if extr_dim == 1:
-            raise AssertionError("Вторая клетка пары должна быть максимумом или минимумом!")
-        else:
-            saddles = [x for x in self.msgraph[extr] if x != saddle]  # Сёдла-соседи максимума (кроме седла из пары)
-            # Минимумы (максимумы) - соседи седла
-            mins_or_maxs = self.get_min_neib_msgraph(saddle) if extr_dim == 0 else self.get_max_neib_msgraph(saddle)
-            # Вторая клетка-минимум (максимум)
-            min_or_max = mins_or_maxs[0] if mins_or_maxs[0] != extr else mins_or_maxs[1]
-            for x in self.msgraph[saddle]:
-                self.msgraph[x].remove(saddle)
-            self.msgraph[saddle].clear()
-            for s in saddles:
-                # Добавляем рёбра из соседей минимума (максимума) в другой минимум (максимум)
-                self.msgraph[s].remove(extr)
-                self.msgraph[extr].append(s)
-                self.msgraph[s].append(min_or_max)
-                self.msgraph[min_or_max].append(s)
-            self.msgraph[extr].clear()
-            # Дуга, продолжающая дуги из сёдел-соседей экстремума
-            arc_extension = list(reversed(self.find_arc(saddle, extr, check_unique=True)[1: -1]))
-            arc_extension.extend(self.find_arc(saddle, min_or_max, check_unique=False))
-            # Проводим новые дуги
-            for s in saddles:
-                self.find_arc(s, extr, check_unique=False).extend(arc_extension)
-            # Удаляем дуги из седла
-            self.arcs = [arc for arc in self.arcs if arc[0] != saddle]
-            # Удаляем критические точки
-            self.unset_critical(saddle)
-            self.unset_critical(extr)
-        print("Pair {0} eliminated".format(pair))
+        arc = self.find_arc(saddle, extr, check_unique=True)
+        # Разворачиваем градиент вдоль дуги.
+        for i in range(0, len(arc), 2):
+            self.set_gradient_arrow(arc[i], arc[i + 1])
+        # Удаляем критические точки
+        self.unset_critical(saddle)
+        self.unset_critical(extr)
+        # Удаляем дуги из удалённого седла
+        for x in self.msgraph[saddle]:
+            self.msgraph[x].remove(saddle)
+        self.msgraph[saddle].clear()
+        self.remove_arcs_from_saddle(saddle)
+        # Пересчитываем дуги из сёдел (согласно дискретному градиенту)
+        for s in saddles:
+            self.msgraph[s].remove(extr)
+            self.msgraph[extr].remove(s)
+            self.msgraph[s].append(min_or_max)
+            self.msgraph[min_or_max].append(s)
+            self.remove_arcs_from_saddle(s)
+            self._cmp_arcs(s)
 
     def print(self):
         print(self.values)
@@ -778,6 +766,7 @@ class TorusMesh:
             plt.draw()
             plt.show()
 
+
 def test():
     """
     Максимум 27
@@ -794,24 +783,23 @@ def test():
     m.draw(draw_gradient=False, draw_arcs=True, draw_graph=False, draw_persistence_pairs=True)
 
 
-# import generators.matern
-# import msmale.field_generator
-#
-# centers = generators.matern.matern_point_process(0.5, 10, 3, 20)
-# data = msmale.field_generator.gen_gaussian_sum_torus(20, 20, centers, 4)
-# msmale.field_generator.perturb(data)
-# m = TorusMesh(data.shape[0], data.shape[1])
-# m.set_values(data)
-# m.print()
-# m.cmp_discrete_gradient()
-# m.cmp_arcs()
-# m.cmp_msgraph()
-# m.cmp_persistent_pairs()
-# m.draw(draw_arcs=True, draw_gradient=False, draw_crit_pts=True, annotate_crit_points=True, draw_persistence_pairs=True, draw_graph=False)
-# print(m.ppairs)
-# plt.ion()
-# m.draw(draw_arcs=False, draw_gradient=True, draw_crit_pts=True, annotate_crit_points=True, draw_persistence_pairs=True, draw_graph=False)
-# for i in range(5):
-#     m.eliminate_pair_revert_gradient()
-#     m.draw(draw_arcs=False, draw_gradient=True, draw_crit_pts=True, annotate_crit_points=True, draw_persistence_pairs=True, draw_graph=False)
-# plt.waitforbuttonpress()
+def test2():
+    import generators.matern
+    import msmale.field_generator
+
+    centers = generators.matern.matern_point_process(0.05, 10, 3, 50)
+    data = msmale.field_generator.gen_gaussian_sum_torus(50, 50, centers, 20)
+    msmale.field_generator.perturb(data)
+    m = TorusMesh(data.shape[0], data.shape[1])
+    m.set_values(data)
+    m.print()
+    m.cmp_discrete_gradient()
+    m.cmp_arcs()
+    m.cmp_msgraph()
+    m.cmp_persistent_pairs()
+
+    for i in range(len(m.ppairs) - 2):
+        m.eliminate_pair_revert_gradient()
+    m.draw(draw_arcs=True, draw_gradient=False, draw_crit_pts=True, draw_persistence_pairs=False)
+
+test2()
