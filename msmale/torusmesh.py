@@ -258,6 +258,40 @@ class TorusMesh:
         self.cr_id[idx] = True
         self.cr_cells.append(idx)
 
+    def unset_critical(self, idx):
+        """
+        Снять метку критической с клетки с данным индексом.
+        :param idx: Индекс клетки
+        :return:
+        """
+        self.cr_id[idx] = False
+        self.cr_cells.remove(idx)
+
+    def find_arc(self, start_idx, end_idx, check_unique=True):
+        """
+        Поиск дуги с заданным началом и концом.
+        :param check_unique: Проверка того, что дуга должна быть единственной.
+        :param start_idx: Индекс клетки начала дуги.
+        :param end_idx: Индекс клетки конца дуги.
+        :return: Одна дуга. Если дуга не одна, то бросается исключение.
+        """
+        # Ищем соответствующую дугу
+        curr_arcs = [arc for arc in self.arcs if arc[0] == start_idx and arc[-1] == end_idx]
+        if len(curr_arcs) == 0:
+            raise RuntimeError("Дуга, соответствующая персистентной паре, не найдена!")
+        elif len(curr_arcs) >= 2 and check_unique:
+            raise RuntimeError("Дуга, соответствующая персистентной паре, должна быть ровно одна!")
+        return curr_arcs[0]
+
+    def remove_arc(self, start_idx, end_idx):
+        """
+        Удаление дуги с заданным началом и концом.
+        :param start_idx: Индекс клетки начала дуги
+        :param end_idx: Индекс клетки конца дуги.
+        :return: Исключение бросается в случае, если искомая дуга не одна.
+        """
+        self.arcs.remove(self.find_arc(start_idx, end_idx, check_unique=True))
+
     def is_unpaired(self, idx):
         """
         Проверяем, является ли клетка спаренной или помеченной как критическая
@@ -429,6 +463,7 @@ class TorusMesh:
 
         # Сортируем клетки по возрастанию значения — получаем фильтрацию.
         self.cr_cells.sort(key=lambda idx: self._extvalue(idx))
+        print("Осталось {0} критических точек".format(len(self.cr_cells)))
 
     def cmp_msgraph(self):
         """
@@ -463,7 +498,6 @@ class TorusMesh:
     def cmp_arcs(self):
         """
         Вычисляем сепаратрисы MS-комплекса.
-        Граф к моменту вызова функции должен быть вычислен.
         :return:
         """
         self.arcs = []
@@ -612,26 +646,19 @@ class TorusMesh:
             return
         # Первая клетка — седло, вторая — максимум или минимум.
         pair = self.ppairs.pop()
-        saddle = self.cr_cells[pair[0]]
+        saddle = pair[0]
         if self.dim(saddle) != 1:
             raise AssertionError("Первая клетка пары должна быть седлом!")
-        extr = self.cr_cells[pair[1]]
+        extr = pair[1]
         extr_dim = self.dim(extr)
         # Разворот градиента.
         if extr_dim == 1:
             raise AssertionError("Вторая клетка пары должна быть максимумом или минимумом!")
         else:
-            # Ищем соответствующую дугу
-            curr_arcs = [arc for arc in self.arcs if arc[0] == saddle and arc[-1] == extr]
-            if len(curr_arcs) == 0:
-                raise RuntimeError("Дуга, соответствующая персистентной паре, не найдена!")
-            elif len(curr_arcs) >= 2:
-                raise RuntimeError("Дуга, соответствующая персистентной паре, должна быть ровно одна!")
-            arc = curr_arcs[0]
+            arc = self.find_arc(saddle, extr, check_unique=True)
             # Разворачиваем градиент вдоль дуги.
             for i in range(0, len(arc), 2):
                 self.set_gradient_arrow(arc[i], arc[i + 1])
-
 
     def eliminate_pair_change_msgraph(self):
         """
@@ -646,43 +673,41 @@ class TorusMesh:
         # Первая клетка — седло, вторая — максимум или минимум.
         pair = self.ppairs.pop()
         saddle = pair[0]
-        if self.dim(self.cr_cells[saddle]) != 1:
+        if self.dim(saddle) != 1:
             raise AssertionError("Первая клетка пары должна быть седлом!")
         extr = pair[1]
-        extr_dim = self.dim(self.cr_cells[extr])
+        extr_dim = self.dim(extr)
 
         # Изменение графа Морса-Смейла.
         if extr_dim == 1:
             raise AssertionError("Вторая клетка пары должна быть максимумом или минимумом!")
-        elif extr_dim == 0:
-            # Вторая клетка — минимум
+        else:
             saddles = [x for x in self.msgraph[extr] if x != saddle]  # Сёдла-соседи максимума (кроме седла из пары)
-            mins = self.get_min_neib_msgraph(saddle)
-            minimum = mins[0] if mins[0] != extr else mins[1]
+            # Минимумы (максимумы) - соседи седла
+            mins_or_maxs = self.get_min_neib_msgraph(saddle) if extr_dim == 0 else self.get_max_neib_msgraph(saddle)
+            # Вторая клетка-минимум (максимум)
+            min_or_max = mins_or_maxs[0] if mins_or_maxs[0] != extr else mins_or_maxs[1]
             for x in self.msgraph[saddle]:
                 self.msgraph[x].remove(saddle)
             self.msgraph[saddle].clear()
             for s in saddles:
-                # Добавляем рёбра из соседей максимума в другой максимум
+                # Добавляем рёбра из соседей минимума (максимума) в другой минимум (максимум)
                 self.msgraph[s].remove(extr)
                 self.msgraph[extr].append(s)
-                self.msgraph[s].append(minimum)
-                self.msgraph[minimum].append(s)
+                self.msgraph[s].append(min_or_max)
+                self.msgraph[min_or_max].append(s)
             self.msgraph[extr].clear()
-        elif extr_dim == 2:
-            saddles = [x for x in self.msgraph[extr] if x != saddle]  # Сёдла-соседи максимума (кроме седла из пары)
-            maxs = self.get_max_neib_msgraph(saddle)
-            maximum = maxs[0] if maxs[0] != extr else maxs[1]
-            for x in self.msgraph[saddle]:
-                self.msgraph[x].remove(saddle)
-            self.msgraph[saddle].clear()
+            # Дуга, продолжающая дуги из сёдел-соседей экстремума
+            arc_extension = list(reversed(self.find_arc(saddle, extr, check_unique=True)[1: -1]))
+            arc_extension.extend(self.find_arc(saddle, min_or_max, check_unique=False))
+            # Проводим новые дуги
             for s in saddles:
-                # Добавляем рёбра из соседей минимума в другой минимум
-                self.msgraph[s].remove(extr)
-                self.msgraph[extr].append(s)
-                self.msgraph[s].append(maximum)
-                self.msgraph[maximum].append(s)
-            self.msgraph[extr].clear()
+                self.find_arc(s, extr, check_unique=False).extend(arc_extension)
+            # Удаляем дуги из седла
+            self.arcs = [arc for arc in self.arcs if arc[0] != saddle]
+            # Удаляем критические точки
+            self.unset_critical(saddle)
+            self.unset_critical(extr)
         print("Pair {0} eliminated".format(pair))
 
     def print(self):
@@ -705,9 +730,9 @@ class TorusMesh:
         plt.colorbar(cur_plot)
         if draw_graph:
             edges = []
-            for cidx in range(len(self.cr_cells)):
+            for cidx in self.cr_cells:
                 for cidx2 in self.msgraph[cidx]:
-                    edges.append([self._coords(self.cr_cells[cidx]), self._coords(self.cr_cells[cidx2])])
+                    edges.append([self._coords(cidx), self._coords(cidx2)])
             lc = mc.LineCollection(edges, colors='k', linewidths=2, zorder=1)
             plt.gca().add_collection(lc)
         if draw_gradient:
@@ -765,7 +790,8 @@ def test():
     m.cmp_discrete_gradient()
     m.cmp_msgraph()
     m.cmp_arcs()
-    m.draw(draw_gradient=False, draw_arcs=True, draw_graph=False)
+    m.cmp_persistent_pairs()
+    m.draw(draw_gradient=False, draw_arcs=True, draw_graph=False, draw_persistence_pairs=True)
 
 
 # import generators.matern
