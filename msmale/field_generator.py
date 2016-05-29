@@ -1,6 +1,7 @@
 import numpy as np
 import numpy.random
 import scipy.stats
+from PIL import Image
 
 
 def gen_gaussian_sum_rectangle(str, col, centers, sigma):
@@ -59,6 +60,18 @@ def gen_sincos_field(str, col, kX, kY):
         for j in range(col):
             field[i, j] = func(i, j)
     return field
+
+
+def gen_bmp_field(fname):
+    """
+    Построить сетку по BMP-изображению.
+    В узлах значения яркости в пикселе.
+    :param fname:
+    :return:
+    """
+    with Image.open(fname) as image:
+        image = image.convert('L')
+        return np.array(image)
 
 
 def perturb(field, eps=0.000001):
