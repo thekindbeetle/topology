@@ -278,9 +278,11 @@ class TorusMesh:
         # Ищем соответствующую дугу
         curr_arcs = [arc for arc in self.arcs if arc[0] == start_idx and arc[-1] == end_idx]
         if len(curr_arcs) == 0:
-            raise RuntimeError("Дуга, соответствующая персистентной паре ({0}, {1}), не найдена!".format(start_idx, end_idx))
+            raise RuntimeError("Дуга, соответствующая персистентной паре ({0}, {1}), не найдена!"
+                               .format(start_idx, end_idx))
         elif len(curr_arcs) >= 2 and check_unique:
-            raise RuntimeError("Дуга, соответствующая персистентной паре ({0}, {1}), должна быть ровно одна!".format(start_idx, end_idx))
+            raise RuntimeError("Дуга, соответствующая персистентной паре ({0}, {1}), должна быть ровно одна!"
+                               .format(start_idx, end_idx))
         return curr_arcs[0]
 
     def remove_arc(self, start_idx, end_idx):
@@ -412,7 +414,7 @@ class TorusMesh:
         percentage = 0
 
         for idx in range(self.size):
-            if idx / self.size > (percentage + 1) * 0.01:
+            if idx / self.size > (percentage + 5) * 0.01:
                 percentage += 5
                 print("Gradient computation... {0}% completed".format(percentage))
             lstar = self.lower_star(idx)
@@ -652,13 +654,14 @@ class TorusMesh:
         pairs.sort(key=lambda x: x[2], reverse=True)  # Сортируем пары по убыванию значения
         self.ppairs = pairs
 
-    def eliminate_pair_revert_gradient(self):
+    def eliminate_pair_revert_gradient(self, log=False):
         """
         Сократить следующую по очерёдности персистентную пару.
         !При помощи разворота градиента!
         На сокращаемой дуге разворачивается градиент, затем удаляются дуги, следующие из удалённого седла;
         производится локальный пересчёт дуг по новому градиенту.
         Вручную исправляются записи в МС-графе, удаляются критические точки из пары.
+        :param log: Включить текстовый вывод.
         :return:
         """
         # Если пар не осталось, то скоращать нечего.
@@ -700,6 +703,106 @@ class TorusMesh:
             self.msgraph[min_or_max].append(s)
             self.remove_arcs_from_saddle(s)
             self._cmp_arcs(s)
+        if log:
+            print("Pair {0} eliminated.".format(pair))
+
+    def eliminate_pair_change_msgraph(self, log=False):
+        """
+        Сократить следующую по очерёдности персистентную пару.
+        !Изменяется граф Морса-Смейла!
+        Берётся следущая по очереди персистентная пара.
+        Критические точки из пары удаляются, новые дуги получаются продолжением через дугу, обратную сокращённой.
+        (см. Sousbie)
+        :param log: включить текстовый вывод.
+        :return:
+        """
+        # Если пар не осталось, то сокращать нечего.
+        if not self.ppairs:
+            print("Список персистентных пар пуст!")
+            return
+        # Первая клетка — седло, вторая — максимум или минимум.
+        pair = self.ppairs.pop()
+        saddle = pair[0]
+        if self.dim(saddle) != 1:
+            raise AssertionError("Первая клетка пары должна быть седлом!")
+        extr = pair[1]
+        extr_dim = self.dim(extr)
+
+        if extr_dim == 1:
+            raise AssertionError("Вторая клетка пары должна быть максимумом или минимумом!")
+
+        # Изменение графа Морса-Смейла.
+        saddles = [x for x in self.msgraph[extr] if x != saddle]  # Сёдла-соседи максимума (кроме седла из пары)
+        # Минимумы (максимумы) - соседи седла
+        mins_or_maxs = self.get_min_neib_msgraph(saddle) if extr_dim == 0 else self.get_max_neib_msgraph(saddle)
+        # Вторая клетка-минимум (максимум)
+        min_or_max = mins_or_maxs[0] if mins_or_maxs[0] != extr else mins_or_maxs[1]
+        for x in self.msgraph[saddle]:
+            self.msgraph[x].remove(saddle)
+        self.msgraph[saddle].clear()
+        for s in saddles:
+            # Добавляем рёбра из соседей минимума (максимума) в другой минимум (максимум)
+            self.msgraph[s].remove(extr)
+            self.msgraph[extr].append(s)
+            self.msgraph[s].append(min_or_max)
+            self.msgraph[min_or_max].append(s)
+        self.msgraph[extr].clear()
+        # Дуга, продолжающая дуги из сёдел-соседей экстремума
+        arc_extension = list(reversed(self.find_arc(saddle, extr, check_unique=True)[1: -1]))
+        arc_extension.extend(self.find_arc(saddle, min_or_max, check_unique=False))
+        # Проводим новые дуги
+        for s in saddles:
+            self.find_arc(s, extr, check_unique=False).extend(arc_extension)
+        # Удаляем дуги из седла
+        self.arcs = [arc for arc in self.arcs if arc[0] != saddle]
+        # Удаляем критические точки
+        self.unset_critical(saddle)
+        self.unset_critical(extr)
+        if log:
+            print("Pair {0} eliminated".format(pair))
+
+    def simplify_by_level(self, level, method='gradient'):
+        """
+        Упрощение до заданного уровня.
+        :param method: Метод, которым сокращаются персистентные пары.
+            'gradient' — методом обращения градиента
+            'arc' — методом восстановления дуг
+        :param level: Уровень, до которого сокращаем персистентные пары.
+        :return:
+        """
+        possible_methods = ('gradient', 'arc')
+        if method not in possible_methods:
+            raise AssertionError("Аргумент {0} указан неверно.".format('<method>'))
+        while self.ppairs[-1][2] < level:
+            if method == 'gradient':
+                self.eliminate_pair_revert_gradient()
+            elif method == 'arc':
+                self.eliminate_pair_change_msgraph()
+
+    def simplify_by_percent(self, percentage, method='gradient'):
+        """
+        Упростиь заданный процент персистентных пар.
+        :param method: Метод, которым сокращаются персистентные пары.
+            'gradient' — методом обращения градиента
+            'arc' — методом восстановления дуг
+        :param percentage: Процент персистентных пар для упрощения. Значение от 0 до 100.
+        :return:
+        """
+        possible_methods = ('gradient', 'arc')
+        if method not in possible_methods:
+            raise AssertionError("Аргумент {0} указан неверно.".format('<method>'))
+        if percentage > 100 or percentage < 0:
+            raise AssertionError("Процент должен лежать в интервале от 0 до 100!")
+        pairs_elim_num = int(percentage * 0.01 * len(self.ppairs))
+        percents = 0
+        for i in range(pairs_elim_num):
+            if i / pairs_elim_num > (percents + 5) * 0.01:
+                percents += 5
+                print("Simplification... {0}% completed".format(percents))
+            if method == 'gradient':
+                self.eliminate_pair_revert_gradient()
+            elif method == 'arc':
+                self.eliminate_pair_change_msgraph()
 
     def print(self):
         print(self.values)
@@ -708,7 +811,7 @@ class TorusMesh:
              draw_crit_pts=True,
              annotate_crit_points=False,
              draw_persistence_pairs=False,
-             draw_gradient=True,
+             draw_gradient=False,
              draw_arcs=True,
              draw_graph=False,
              fname=None):
@@ -790,8 +893,9 @@ def test2():
     import generators.matern
     import msmale.field_generator
 
-    centers = generators.matern.matern_point_process(0.05, 10, 3, 50)
-    data = msmale.field_generator.gen_gaussian_sum_torus(50, 50, centers, 20)
+    #centers = generators.matern.matern_point_process(0.05, 10, 3, 50)
+    #data = msmale.field_generator.gen_gaussian_sum_torus(50, 50, centers, 20)
+    data = msmale.field_generator.gen_bmp_field("D:/Dropbox/Макаренко/data/crop4.bmp")
     msmale.field_generator.perturb(data)
     m = TorusMesh(data.shape[0], data.shape[1])
     m.set_values(data)
@@ -801,8 +905,10 @@ def test2():
     m.cmp_msgraph()
     m.cmp_persistent_pairs()
 
-    for i in range(len(m.ppairs) - 2):
-        m.eliminate_pair_revert_gradient()
+    m.simplify_by_percent(95, method='arc')
+    # for i in range(len(m.ppairs) - 2):
+        # m.eliminate_pair_revert_gradient()
+        # m.eliminate_pair_change_msgraph()
     m.draw(draw_arcs=True, draw_gradient=False, draw_crit_pts=True, draw_persistence_pairs=False)
 
 test2()
