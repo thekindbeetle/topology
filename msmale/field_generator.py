@@ -71,7 +71,7 @@ def gen_bmp_field(fname):
     """
     with Image.open(fname) as image:
         image = image.convert('L')
-        return np.array(image)
+        return np.array(image, dtype=float)
 
 
 def perturb(field, eps=0.000001):
