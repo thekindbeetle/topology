@@ -278,9 +278,9 @@ class TorusMesh:
         # Ищем соответствующую дугу
         curr_arcs = [arc for arc in self.arcs if arc[0] == start_idx and arc[-1] == end_idx]
         if len(curr_arcs) == 0:
-            raise RuntimeError("Дуга, соответствующая персистентной паре, не найдена!")
+            raise RuntimeError("Дуга, соответствующая персистентной паре ({0}, {1}), не найдена!".format(start_idx, end_idx))
         elif len(curr_arcs) >= 2 and check_unique:
-            raise RuntimeError("Дуга, соответствующая персистентной паре, должна быть ровно одна!")
+            raise RuntimeError("Дуга, соответствующая персистентной паре ({0}, {1}), должна быть ровно одна!".format(start_idx, end_idx))
         return curr_arcs[0]
 
     def remove_arc(self, start_idx, end_idx):
@@ -292,13 +292,16 @@ class TorusMesh:
         """
         self.arcs.remove(self.find_arc(start_idx, end_idx, check_unique=True))
 
-    def remove_arcs_from_saddle(self, start_idx):
+    def remove_arcs_from_saddle(self, start_idx, log=False):
         """
         Удаление всех дуг из данного седла.
         :param start_idx: Индекс седла.
         :return:
         """
+        arcs_to_remove = [arc for arc in self.arcs if arc[0] == start_idx]
         self.arcs = [arc for arc in self.arcs if arc[0] != start_idx]
+        if log:
+            print("Дуги удалены: {0}".format(arcs_to_remove))
 
     def is_unpaired(self, idx):
         """
@@ -606,7 +609,7 @@ class TorusMesh:
         get_lowest_of = lambda bitset: bitset.to01().index('1')
 
         # Персистентность пары
-        pers = lambda cidx1, cidx2: np.abs(np.mean(self._extvalue(cidx1)) - np.mean(self._extvalue(cidx2)))
+        pers = lambda cidx1, cidx2: np.abs(np.max(self._extvalue(cidx1)) - np.max(self._extvalue(cidx2)))
 
         # проходим по прямой фильтрации
         for i in range(ccnum):
