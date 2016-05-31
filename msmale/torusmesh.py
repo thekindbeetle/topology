@@ -816,11 +816,11 @@ class TorusMesh:
              draw_graph=False,
              fname=None):
         plt.figure()
-        plt.gca().set_xlim(0, self.sizeX)
-        plt.gca().set_ylim(0, self.sizeY)
+        plt.gca().set_xlim(0, self.sizeY)
+        plt.gca().set_ylim(0, self.sizeX)
         figManager = plt.get_current_fig_manager()
         figManager.window.showMaximized()
-        cur_plot = plt.pcolor(self.values, cmap="Blues")
+        cur_plot = plt.pcolor(self.values, cmap="Greys")
         plt.colorbar(cur_plot)
         if draw_graph:
             edges = []
@@ -895,20 +895,18 @@ def test2():
 
     #centers = generators.matern.matern_point_process(0.05, 10, 3, 50)
     #data = msmale.field_generator.gen_gaussian_sum_torus(50, 50, centers, 20)
-    data = msmale.field_generator.gen_bmp_field("D:/Dropbox/Макаренко/data/crop4.bmp")
+    data = msmale.field_generator.gen_bmp_field("D:/Dropbox/Макаренко/data/ao_1.bmp")
     msmale.field_generator.perturb(data)
     m = TorusMesh(data.shape[0], data.shape[1])
     m.set_values(data)
-    m.print()
-    m.cmp_discrete_gradient()
-    m.cmp_arcs()
-    m.cmp_msgraph()
-    m.cmp_persistent_pairs()
+    # m.print()
+    # m.cmp_discrete_gradient()
+    # m.cmp_arcs()
+    # m.cmp_msgraph()
+    # m.cmp_persistent_pairs()
 
-    m.simplify_by_percent(95, method='arc')
-    # for i in range(len(m.ppairs) - 2):
-        # m.eliminate_pair_revert_gradient()
-        # m.eliminate_pair_change_msgraph()
-    m.draw(draw_arcs=True, draw_gradient=False, draw_crit_pts=True, draw_persistence_pairs=False)
+    #m.simplify_by_percent(95, method='arc')
+
+    m.draw(draw_arcs=False, draw_gradient=False, draw_crit_pts=False, draw_persistence_pairs=False)
 
 test2()

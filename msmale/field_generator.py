@@ -71,7 +71,20 @@ def gen_bmp_field(fname):
     """
     with Image.open(fname) as image:
         image = image.convert('L')
-        return np.array(image, dtype=float)
+        image = image.transpose(Image.FLIP_LEFT_RIGHT)
+        image = image.transpose(Image.ROTATE_180)
+        extensionX = int(image.size[0] * 0.1)
+        extensionY = int(image.size[1] * 0.1)
+        # Добавляем по 10% к изображению
+        newimage = Image.new('L', (image.size[0] + extensionX, image.size[1] + extensionY))
+        newimage.paste(image, (0, 0))
+        horiz_image = image.resize((extensionX, image.size[1])).transpose(Image.FLIP_LEFT_RIGHT)
+        newimage.paste(horiz_image, (image.size[0], 0))
+        vert_image = image.resize((image.size[0], extensionY)).transpose(Image.FLIP_TOP_BOTTOM)
+        newimage.paste(vert_image, (0, image.size[1]))
+        corner_image = image.resize((extensionX, extensionY)).transpose(Image.ROTATE_180)
+        newimage.paste(corner_image, image.size)
+        return np.array(newimage, dtype=float)
 
 
 def perturb(field, eps=0.000001):
