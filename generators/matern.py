@@ -19,16 +19,17 @@ def uniform_disk(x, y, r):
     return x + xt, y + yt
 
 
-def matern_point_process(kappa, r, mu, dx, par=False):
+def matern_point_process(kappa, r, mu, dx, include_parents=False, logging_on=True):
     """
     A Poisson( kappa ) number of parents are created,
     each forming a Poisson( mu ) numbered cluster of points,
     distributed uniformly in a circle of radius `r`
-    :param kappa: параметр Пуассоновского распределения, определяющего количество точек в квадрате
+    :param kappa: параметр Пуассоновского распределения, определяющего количество точек в единичном квадрате
     :param r: радиус круга, в котором для каждого родителя создаются потомки
     :param mu: параметр Пуассоновского распределения, определяющего количество потомков
     :param dx: длина стороны квадрата
-    :param par: вывести родительские события
+    :param include_parents: вывести родительские события
+    :param logging_on: текстовый вывод
     :return:
     """
     # create a set of parent points from a Poisson( kappa )
@@ -39,7 +40,7 @@ def matern_point_process(kappa, r, mu, dx, par=False):
     m = parents.shape[0]
 
     # an empty list for the Matern process points
-    mp = list()
+    matern_points = list()
 
     # for each parent point..
     for i in range(m):
@@ -56,11 +57,15 @@ def matern_point_process(kappa, r, mu, dx, par=False):
             x, y = uniform_disk(parents[i, 0], parents[i, 1], r)
 
             # add the child point to the list MP
-            mp.append([x, y])
+            matern_points.append([x, y])
 
     # return a numpy array
-    mp = np.array(mp)
-    if par:
-      return mp, parents
+    matern_points = np.array(matern_points)
+    if include_parents:
+        if logging_on:
+            print("{0} Matern distributed points generated.".format(len(matern_points) + len(parents)))
+        return matern_points, parents
     else:
-      return mp
+        if logging_on:
+            print("{0} Matern distributed points generated.".format(len(matern_points)))
+        return matern_points

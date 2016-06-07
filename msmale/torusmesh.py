@@ -396,12 +396,13 @@ class TorusMesh:
         star.sort(key=(lambda x: self._extvalue(x)))
         return star
 
-    def cmp_discrete_gradient(self):
+    def cmp_discrete_gradient(self, logging_on=True):
         """
         Реализация процедуры вычисления дискретного градиента по исходным данным.
         Сюда включено вычисление критических клеток.
         ProcessLowerStars
         (Vanessa Robins)
+        :param logging_on: Текстовый вывод.
         :return:
         """
         self.cr_cells = []
@@ -411,12 +412,17 @@ class TorusMesh:
         # Две вспомогательные кучи
         pq_zero = []
         pq_one = []
-        percentage = 0
+        checkpoints_num = 20
+        current_checkpoint = 0
+
+        if logging_on:
+            print('Computation of discrete gradient field...', end='')
 
         for idx in range(self.size):
-            if idx / self.size > (percentage + 5) * 0.01:
-                percentage += 5
-                print("Gradient computation... {0}% completed".format(percentage))
+            if logging_on and idx > self.size * current_checkpoint / checkpoints_num:
+                current_checkpoint += 1
+                print('.', end='')
+
             lstar = self.lower_star(idx)
             if not lstar:
                 self.set_critical(idx)  # Если значение в вершине меньше, чем во всех соседних, то она - минимум.
@@ -457,6 +463,9 @@ class TorusMesh:
 
         # Сортируем клетки по возрастанию значения — получаем фильтрацию.
         self.cr_cells.sort(key=lambda idx: self._extvalue(idx))
+
+        if logging_on:
+            print(" Completed.")
 
     def cmp_crit_cells(self):
         """
@@ -564,16 +573,16 @@ class TorusMesh:
         Вычисление персистентных пар.
         :return:
         """
-        ccnum = len(self.cr_cells) # Количество критических клеток
+        critical_cells_num = len(self.cr_cells) # Количество критических клеток
 
         # Помечаем критические клетки как негативные (создающие цикл) или позитивные (убивающие цикл).
         # Метки критических клеток (негативная / позитивная)
-        signs = bitarray(ccnum)
+        signs = bitarray(critical_cells_num)
 
         # Строим отображение критических точек в индекс битового массива меток
         idx_reverse = {self.cr_cells[cidx]: cidx for cidx in range(len(self.cr_cells))}
 
-        uf = msmale.unionfind.UnionFind(ccnum)
+        uf = msmale.unionfind.UnionFind(critical_cells_num)
 
         # Cчитаем, что к этому моменту массив критических точек представляет собой фильтрацию.
         for i in range(len(self.cr_cells)):
@@ -600,32 +609,28 @@ class TorusMesh:
 
         # список циклов
         # каждый цикл соответствует негативной клетке
-        cycles = [None] * ccnum
+        cycles = [None] * critical_cells_num
 
-        curset = ccnum * bitarray('0')
-
-        # Последнее вхождение единицы в битовый массив (если её нет — ValueError)
-        get_highest_of = lambda bitset: bitset.to01().rindex('1')
-
-        # Первое вхождение единицы в битовый массив (если её нет — ValueError)
-        get_lowest_of = lambda bitset: bitset.to01().index('1')
+        curset = critical_cells_num * bitarray('0')
 
         # Персистентность пары
-        pers = lambda cidx1, cidx2: np.abs(np.max(self._extvalue(cidx1)) - np.max(self._extvalue(cidx2)))
+        def persistence(cidx1, cidx2):
+            return np.abs(np.max(self._extvalue(cidx1)) - np.max(self._extvalue(cidx2)))
 
         # проходим по прямой фильтрации
-        for i in range(ccnum):
+        for i in range(critical_cells_num):
             cidx = self.cr_cells[i]
             # Смотрим только негативные сёдла
             if self.dim(cidx) == 1 and not signs[i]:
-                for neib in self.get_min_neib_msgraph(cidx):
-                    curset[idx_reverse[neib]] = True   # 5:
+                for neighbor in self.get_min_neib_msgraph(cidx):
+                    curset[idx_reverse[neighbor]] = True   # 5:
                 while curset.count() > 0:
-                    s = get_highest_of(curset)  # 9:
+                    # Последнее вхождение единицы в битовый массив (если её нет — ValueError)
+                    s = curset.to01().rindex('1')  # 9:
                     if not cycles[s]:
                         cycles[s] = copy.deepcopy(curset)
                         cycles[i] = copy.deepcopy(curset)
-                        pairs.append((self.cr_cells[i], self.cr_cells[s], pers(self.cr_cells[i], self.cr_cells[s])))
+                        pairs.append((self.cr_cells[i], self.cr_cells[s], persistence(self.cr_cells[i], self.cr_cells[s])))
                     else:
                         for b in re.finditer('1', cycles[s].to01()):  # 16:
                             idx = b.span()[0]
@@ -634,18 +639,19 @@ class TorusMesh:
         curset = len(self.cr_cells) * bitarray('0')
 
         # проходим по обратной фильтрации
-        for i in reversed(range(ccnum)):
+        for i in reversed(range(critical_cells_num)):
             cidx = self.cr_cells[i]
             # Смотрим только позитивные сёдла
             if self.dim(cidx) == 1 and signs[i]:
-                for neib in self.get_max_neib_msgraph(cidx):
-                    curset[idx_reverse[neib]] = True
+                for neighbor in self.get_max_neib_msgraph(cidx):
+                    curset[idx_reverse[neighbor]] = True
                 while curset.count() > 0:
-                    s = get_lowest_of(curset)
+                    # Первое вхождение единицы в битовый массив (если её нет — ValueError)
+                    s = curset.to01().index('1')
                     if not cycles[s]:
                         cycles[s] = copy.deepcopy(curset)
                         cycles[i] = copy.deepcopy(curset)
-                        pairs.append((self.cr_cells[i], self.cr_cells[s], pers(self.cr_cells[i], self.cr_cells[s])))
+                        pairs.append((self.cr_cells[i], self.cr_cells[s], persistence(self.cr_cells[i], self.cr_cells[s])))
                     else:
                         for b in re.finditer('1', cycles[s].to01()):  # 16:
                             idx = b.span()[0]
@@ -706,14 +712,14 @@ class TorusMesh:
         if log:
             print("Pair {0} eliminated.".format(pair))
 
-    def eliminate_pair_change_msgraph(self, log=False):
+    def eliminate_pair_change_msgraph(self, logging_on=False):
         """
         Сократить следующую по очерёдности персистентную пару.
         !Изменяется граф Морса-Смейла!
         Берётся следущая по очереди персистентная пара.
         Критические точки из пары удаляются, новые дуги получаются продолжением через дугу, обратную сокращённой.
         (см. Sousbie)
-        :param log: включить текстовый вывод.
+        :param logging_on: Текстовый вывод.
         :return:
         """
         # Если пар не осталось, то сокращать нечего.
@@ -758,51 +764,77 @@ class TorusMesh:
         # Удаляем критические точки
         self.unset_critical(saddle)
         self.unset_critical(extr)
-        if log:
+        if logging_on:
             print("Pair {0} eliminated".format(pair))
 
-    def simplify_by_level(self, level, method='gradient'):
+    def simplify_by_level(self, level, method='gradient', logging_on=True):
         """
         Упрощение до заданного уровня.
         :param method: Метод, которым сокращаются персистентные пары.
             'gradient' — методом обращения градиента
             'arc' — методом восстановления дуг
         :param level: Уровень, до которого сокращаем персистентные пары.
+        :param logging_on: Текстовый вывод.
         :return:
         """
         possible_methods = ('gradient', 'arc')
         if method not in possible_methods:
-            raise AssertionError("Аргумент {0} указан неверно.".format('<method>'))
-        while self.ppairs[-1][2] < level:
+            raise AssertionError("Аргумент 'method' указан неверно. Допустимые значения: {0}".format(possible_methods))
+
+        pairs_elimination_num = len([pair for pair in self.ppairs if pair[2] < level])
+        checkpoints_num = 20
+        current_checkpoint = 0
+
+        if logging_on:
+            print('Simplification...', end='')
+
+        for i in range(pairs_elimination_num):
+            if logging_on and i > pairs_elimination_num * current_checkpoint / checkpoints_num:
+                current_checkpoint += 1
+                print('.', end='')
+
             if method == 'gradient':
                 self.eliminate_pair_revert_gradient()
             elif method == 'arc':
                 self.eliminate_pair_change_msgraph()
 
-    def simplify_by_percent(self, percentage, method='gradient'):
+        if logging_on:
+            print('\nSimplification completed. {0} pairs eliminated.'.format(pairs_elimination_num))
+
+    def simplify_by_percent(self, percentage, method='gradient', logging_on=True):
         """
-        Упростиь заданный процент персистентных пар.
+        Упрощение заданного процента персистентных пар.
         :param method: Метод, которым сокращаются персистентные пары.
             'gradient' — методом обращения градиента
             'arc' — методом восстановления дуг
         :param percentage: Процент персистентных пар для упрощения. Значение от 0 до 100.
+        :param logging_on: Текстовый вывод.
         :return:
         """
         possible_methods = ('gradient', 'arc')
         if method not in possible_methods:
-            raise AssertionError("Аргумент {0} указан неверно.".format('<method>'))
+            raise AssertionError("Аргумент 'method' указан неверно. Допустимые значения: {0}".format(possible_methods))
         if percentage > 100 or percentage < 0:
             raise AssertionError("Процент должен лежать в интервале от 0 до 100!")
-        pairs_elim_num = int(percentage * 0.01 * len(self.ppairs))
-        percents = 0
-        for i in range(pairs_elim_num):
-            if i / pairs_elim_num > (percents + 5) * 0.01:
-                percents += 5
-                print("Simplification... {0}% completed".format(percents))
+
+        pairs_elimination_num = int(percentage * 0.01 * len(self.ppairs))
+        checkpoints_num = 20
+        current_checkpoint = 0
+
+        if logging_on:
+            print('Simplification...', end='')
+
+        for i in range(pairs_elimination_num):
+            if logging_on and i > pairs_elimination_num * current_checkpoint / checkpoints_num:
+                current_checkpoint += 1
+                print('.', end='')
             if method == 'gradient':
                 self.eliminate_pair_revert_gradient()
             elif method == 'arc':
                 self.eliminate_pair_change_msgraph()
+
+        if logging_on:
+            print('\nSimplification completed. {0} pairs eliminated.'.format(pairs_elimination_num))
 
     def print(self):
         print(self.values)
@@ -908,5 +940,3 @@ def test2():
     #m.simplify_by_percent(95, method='arc')
 
     m.draw(draw_arcs=False, draw_gradient=False, draw_crit_pts=False, draw_persistence_pairs=False)
-
-test2()
