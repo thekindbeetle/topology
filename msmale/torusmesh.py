@@ -9,6 +9,29 @@ import copy
 import re
 
 
+def _simplify_arc(arc):
+    """
+    Удалить возвратные пути (усы) из дуги.
+    Пускаем два итератора с разных концов. Если значения совпадут
+    :param arc:
+    :return:
+    """
+    it = 0
+    arc_num = len(arc)
+    # Находим подпоследовательность ABA в дуге — конец уса.
+    while it < arc_num - 2:
+        if arc[it - 1] == arc[it + 1]:
+            # idx — конец уса.
+            mustache_len = 1  # Длина уса
+            while arc[it - mustache_len - 1] == arc[it + mustache_len + 1]:
+                mustache_len += 1
+            del arc[it - mustache_len: it + mustache_len]  # Удаляем ус
+            arc_num -= mustache_len * 2
+            it -= mustache_len  # Перемещаем итератор
+        else:
+            it += 1
+
+
 class TorusMesh:
     """
     Прямоугольная сетка на торе
@@ -758,7 +781,10 @@ class TorusMesh:
         arc_extension.extend(self.find_arc(saddle, min_or_max, check_unique=False))
         # Проводим новые дуги
         for s in saddles:
-            self.find_arc(s, extr, check_unique=False).extend(arc_extension)
+            arc = self.find_arc(s, extr, check_unique=False)
+            arc.extend(arc_extension)
+            # Удаляем усы
+            _simplify_arc(arc)
         # Удаляем дуги из седла
         self.arcs = [arc for arc in self.arcs if arc[0] != saddle]
         # Удаляем критические точки
@@ -798,6 +824,11 @@ class TorusMesh:
             elif method == 'arc':
                 self.eliminate_pair_change_msgraph()
 
+        # Упрощаем дуги (удаляем усы)
+        # if method == 'arc':
+        #     for arc in self.arcs:
+        #         _simplify_arc(arc)
+
         if logging_on:
             print('\nSimplification completed. {0} pairs eliminated.'.format(pairs_elimination_num))
 
@@ -832,6 +863,11 @@ class TorusMesh:
                 self.eliminate_pair_revert_gradient()
             elif method == 'arc':
                 self.eliminate_pair_change_msgraph()
+
+        # Упрощаем дуги (удаляем усы)
+        # if method == 'arc':
+        #     for arc in self.arcs:
+        #         _simplify_arc(arc)
 
         if logging_on:
             print('\nSimplification completed. {0} pairs eliminated.'.format(pairs_elimination_num))
