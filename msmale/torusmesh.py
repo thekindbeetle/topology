@@ -882,10 +882,17 @@ class TorusMesh:
              draw_gradient=False,
              draw_arcs=True,
              draw_graph=False,
-             fname=None):
+             fname=None,
+             cut=None):
         plt.figure()
-        plt.gca().set_xlim(0, self.sizeY)
-        plt.gca().set_ylim(0, self.sizeX)
+
+        if cut is None:
+            plt.gca().set_xlim(0, self.sizeY)
+            plt.gca().set_ylim(0, self.sizeX)
+        else:
+            plt.gca().set_xlim(cut[1], cut[3])
+            plt.gca().set_ylim(cut[0], cut[2])
+
         figManager = plt.get_current_fig_manager()
         figManager.window.showMaximized()
         cur_plot = plt.pcolor(self.values, cmap="Greys")
@@ -914,10 +921,11 @@ class TorusMesh:
         if draw_arcs:
             edges = []
             for arc in self.arcs:
-                for idx in range(len(arc) - 1):
-                    edge = [self._coords(arc[idx]), self._coords(arc[idx + 1])]
-                    if np.abs(edge[0][0] - edge[1][0]) < 1 and np.abs(edge[0][1] - edge[1][1]) < 1:
-                        edges.append([self._coords(arc[idx]), self._coords(arc[idx + 1])])
+                if (cut is None) or self.is_arc_inner(arc, *cut): # Отбрасываем граничные дуги
+                    for idx in range(len(arc) - 1):
+                        edge = [self._coords(arc[idx]), self._coords(arc[idx + 1])]
+                        if np.abs(edge[0][0] - edge[1][0]) < 1 and np.abs(edge[0][1] - edge[1][1]) < 1:
+                            edges.append([self._coords(arc[idx]), self._coords(arc[idx + 1])])
             lc = mc.LineCollection(edges, colors='k', linewidths=1, zorder=1)
             plt.gca().add_collection(lc)
         if draw_crit_pts:
@@ -940,6 +948,19 @@ class TorusMesh:
             plt.draw()
             plt.show()
 
+    def is_arc_inner(self, arc, x, y, lx, ly):
+        """
+        Проверяем, пересекает ли дуга границы заданного прямоугольника.
+        Проверка тупая: смотрим, попали ли в прямоугольник её концы.
+        :param arc: Дуга.
+        :param x: вершины (нижней левой) прямоугольника
+        :param y:
+        :param lx:
+        :param ly:
+        :return:
+        """
+        return x <= self._coords(arc[0])[1] <= lx and y <= self._coords(arc[0])[0] <= ly and \
+               x <= self._coords(arc[-1])[1] <= lx and y <= self._coords(arc[-1])[0] <= ly
 
 def test():
     """
