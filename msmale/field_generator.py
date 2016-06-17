@@ -82,11 +82,12 @@ def gen_sincos_field(rows_num, cols_num, kx, ky):
 
 def gen_field_from_image(filename, filetype='bmp', conditions='torus', compression=10, perturb_data=True):
     """
-    Построить сетку по BMP-изображению.
+    Построить сетку по изображению.
     В узлах значения яркости в пикселе.
     При склейке в тор изображение отражается вправо и вверх с заданным коэффициентом сжатия.
+    :param filetype: Тип файла (BMP или FITS).
     :param conditions: Граничные условия. 'torus' для склейки в тор, 'plain' — без склейки.
-    :param filename: Файл с BMP-изображением.
+    :param filename: Файл с изображением.
     :param compression: Коэффициент сжатия картинки при склейке в тор. По умолчанию 10 (сжатие в десять раз).
     :param perturb_data: Возмущение изображения (по умолчанию — True).
     :return:
@@ -145,19 +146,6 @@ def gen_field_from_image(filename, filetype='bmp', conditions='torus', compressi
             if perturb_data:
                 perturb(image)
             return image
-
-
-def gen_fits_field(filename, conditions='torus', compression=0.1, perturb_data=True):
-    """
-    Построить сетку по BMP-изображению.
-    В узлах значения яркости в пикселе.
-    При склейке в тор изображение отражается вправо и вверх с заданным коэффициентом сжатия.
-    :param conditions: Граничные условия. 'torus' для склейки в тор, 'plain' — без склейки.
-    :param filename: Файл с BMP-изображением.
-    :param compression: Коэффициент сжатия картинки при склейке в тор.
-    :param perturb_data: Возмущение изображения (по умолчанию — True).
-    :return:
-    """
 
 
 def perturb(field, eps=0.000001):
