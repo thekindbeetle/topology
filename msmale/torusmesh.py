@@ -36,43 +36,18 @@ class TorusMesh:
     """
     Прямоугольная сетка на торе
     """
-    # Размеры сетки по X и Y
-    sizeX, sizeY = 0, 0
-
-    # Количество вершин
-    size = 0
-
-    # Список критических клеток
-    cr_cells = []
-
-    # Дискретный градиент
-    V = []
-
-    # Значения сетки
-    values = None
-
-    # Индикатор критических клеток
-    cr_id = []
-
-    # Список персистентных пар
-    ppairs = []
-
-    # Граф Морса-Смейла
-    msgraph = None
-
-    # Дуги комплекса Морса-Смейла
-    arcs = []
 
     def __init__(self, lx, ly):
-        self.sizeX = lx
+        self.sizeX = lx  # Размеры сетки по X и Y
         self.sizeY = ly
-        self.size = lx * ly
-        self.values = np.zeros((self.sizeX, self.sizeY))
-        self.cr_cells = []
-        self.V = [None] * (4 * self.size)
-        self.cr_id = np.zeros(4 * self.size, dtype=bool)
-        self.msgraph = None
-        self.arcs = []
+        self.size = lx * ly  # Количество вершин
+        self.values = np.zeros((self.sizeX, self.sizeY))  # Значения сетки
+        self.cr_cells = []  # Список критических клеток
+        self.V = [None] * (4 * self.size)  # Дискретный градиент
+        self.cr_id = np.zeros(4 * self.size, dtype=bool)  # Индикатор критических клеток
+        self.msgraph = None  # Граф Морса-Смейла
+        self.ppairs = []  # Список персистентных пар
+        self.arcs = {}  # Дуги комплекса Морса-Смейла
 
     def set_values(self, val):
         """
@@ -290,6 +265,13 @@ class TorusMesh:
         self.cr_id[idx] = False
         self.cr_cells.remove(idx)
 
+    def list_arcs(self):
+        """
+        Вывести список дуг
+        :return:
+        """
+        return [item for sublist in self.arcs.values() for item in sublist]
+
     def find_arc(self, start_idx, end_idx, check_unique=True):
         """
         Поиск дуги с заданным началом и концом.
@@ -298,35 +280,26 @@ class TorusMesh:
         :param end_idx: Индекс клетки конца дуги.
         :return: Одна дуга. Если дуга не одна, то бросается исключение.
         """
-        # Ищем соответствующую дугу
-        curr_arcs = [arc for arc in self.arcs if arc[0] == start_idx and arc[-1] == end_idx]
-        if len(curr_arcs) == 0:
-            raise RuntimeError("Дуга, соответствующая персистентной паре ({0}, {1}), не найдена!"
-                               .format(start_idx, end_idx))
-        elif len(curr_arcs) >= 2 and check_unique:
-            raise RuntimeError("Дуга, соответствующая персистентной паре ({0}, {1}), должна быть ровно одна!"
-                               .format(start_idx, end_idx))
-        return curr_arcs[0]
+        arcs_by_start_idx = self.arcs[start_idx]
+        for arc in arcs_by_start_idx:
+            if arc[-1] == end_idx:
+                return arc
+        raise RuntimeError("Дуга, соответствующая персистентной паре ({0}, {1}), не найдена!"
+                           .format(start_idx, end_idx))
 
-    def remove_arc(self, start_idx, end_idx):
+    def is_arc_inner(self, arc, x, y, lx, ly):
         """
-        Удаление дуги с заданным началом и концом.
-        :param start_idx: Индекс клетки начала дуги
-        :param end_idx: Индекс клетки конца дуги.
-        :return: Исключение бросается в случае, если искомая дуга не одна.
-        """
-        self.arcs.remove(self.find_arc(start_idx, end_idx, check_unique=True))
-
-    def remove_arcs_from_saddle(self, start_idx, log=False):
-        """
-        Удаление всех дуг из данного седла.
-        :param start_idx: Индекс седла.
+        Проверяем, пересекает ли дуга границы заданного прямоугольника.
+        Проверка тупая: смотрим, попали ли в прямоугольник её концы.
+        :param arc: Дуга.
+        :param x: вершины (нижней левой) прямоугольника
+        :param y:
+        :param lx:
+        :param ly:
         :return:
         """
-        arcs_to_remove = [arc for arc in self.arcs if arc[0] == start_idx]
-        self.arcs = [arc for arc in self.arcs if arc[0] != start_idx]
-        if log:
-            print("Дуги удалены: {0}".format(arcs_to_remove))
+        return x <= self._coords(arc[0])[1] <= lx and y <= self._coords(arc[0])[0] <= ly and \
+               x <= self._coords(arc[-1])[1] <= lx and y <= self._coords(arc[-1])[0] <= ly
 
     def is_unpaired(self, idx):
         """
@@ -546,6 +519,8 @@ class TorusMesh:
         :param s: Индекс седла.
         :return:
         """
+        self.arcs[s].clear()
+
         # Вычисляем сепаратрисы седло-минимум
         vertices = self._verts(s)
 
@@ -563,7 +538,7 @@ class TorusMesh:
                 cur_v = v[1] if v[0] == cur_v else v[0]
                 separx.append(cur_e)
                 separx.append(cur_v)
-            self.arcs.append(separx)
+            self.arcs[s].append(separx)
 
         # Вычисляем сепаратрисы седло-максимум
         faces = self._cofacets(s)
@@ -580,15 +555,15 @@ class TorusMesh:
                 cur_f = f[1] if f[0] == cur_f else f[0]
                 separx.append(cur_e)
                 separx.append(cur_f)
-            self.arcs.append(separx)
+            self.arcs[s].append(separx)
 
     def cmp_arcs(self):
         """
         Вычисляем сепаратрисы MS-комплекса.
         :return:
         """
-        self.arcs = []
-        for s in self.cp(1): # Цикл по сёдлам
+        self.arcs = dict([(saddle, []) for saddle in self.cp(1)])  # В качестве ключей — индексы сёдел.
+        for s in self.arcs.keys(): # Цикл по сёдлам
             self._cmp_arcs(s)
 
     def cmp_persistent_pairs(self):
@@ -723,26 +698,25 @@ class TorusMesh:
         for x in self.msgraph[saddle]:
             self.msgraph[x].remove(saddle)
         self.msgraph[saddle].clear()
-        self.remove_arcs_from_saddle(saddle)
+        del self.arcs[saddle]
         # Пересчитываем дуги из сёдел (согласно дискретному градиенту)
         for s in saddles:
             self.msgraph[s].remove(extr)
             self.msgraph[extr].remove(s)
             self.msgraph[s].append(min_or_max)
             self.msgraph[min_or_max].append(s)
-            self.remove_arcs_from_saddle(s)
             self._cmp_arcs(s)
         if log:
             print("Pair {0} eliminated.".format(pair))
 
-    def eliminate_pair_change_msgraph(self, logging_on=False):
+    def eliminate_pair_change_msgraph(self, log=False):
         """
         Сократить следующую по очерёдности персистентную пару.
         !Изменяется граф Морса-Смейла!
         Берётся следущая по очереди персистентная пара.
         Критические точки из пары удаляются, новые дуги получаются продолжением через дугу, обратную сокращённой.
         (см. Sousbie)
-        :param logging_on: Текстовый вывод.
+        :param log: Текстовый вывод.
         :return:
         """
         # Если пар не осталось, то сокращать нечего.
@@ -778,19 +752,19 @@ class TorusMesh:
         self.msgraph[extr].clear()
         # Дуга, продолжающая дуги из сёдел-соседей экстремума
         arc_extension = list(reversed(self.find_arc(saddle, extr, check_unique=True)[1: -1]))
-        arc_extension.extend(self.find_arc(saddle, min_or_max, check_unique=False))
+        arc_extension.extend(self.find_arc(saddle, min_or_max, check_unique=True))
         # Проводим новые дуги
         for s in saddles:
-            arc = self.find_arc(s, extr, check_unique=False)
+            arc = self.find_arc(s, extr, check_unique=True)
             arc.extend(arc_extension)
             # Удаляем усы
             _simplify_arc(arc)
         # Удаляем дуги из седла
-        self.arcs = [arc for arc in self.arcs if arc[0] != saddle]
+        del self.arcs[saddle]
         # Удаляем критические точки
         self.unset_critical(saddle)
         self.unset_critical(extr)
-        if logging_on:
+        if log:
             print("Pair {0} eliminated".format(pair))
 
     def simplify_by_level(self, level, method='gradient', logging_on=True):
@@ -832,14 +806,14 @@ class TorusMesh:
         if logging_on:
             print('\nSimplification completed. {0} pairs eliminated.'.format(pairs_elimination_num))
 
-    def simplify_by_percent(self, percentage, method='gradient', logging_on=True):
+    def simplify_by_percent(self, percentage, method='gradient', log=True):
         """
         Упрощение заданного процента персистентных пар.
         :param method: Метод, которым сокращаются персистентные пары.
             'gradient' — методом обращения градиента
             'arc' — методом восстановления дуг
         :param percentage: Процент персистентных пар для упрощения. Значение от 0 до 100.
-        :param logging_on: Текстовый вывод.
+        :param log: Текстовый вывод.
         :return:
         """
         possible_methods = ('gradient', 'arc')
@@ -852,11 +826,11 @@ class TorusMesh:
         checkpoints_num = 20
         current_checkpoint = 0
 
-        if logging_on:
+        if log:
             print('Simplification...', end='')
 
         for i in range(pairs_elimination_num):
-            if logging_on and i > pairs_elimination_num * current_checkpoint / checkpoints_num:
+            if log and i > pairs_elimination_num * current_checkpoint / checkpoints_num:
                 current_checkpoint += 1
                 print('.', end='')
             if method == 'gradient':
@@ -864,12 +838,7 @@ class TorusMesh:
             elif method == 'arc':
                 self.eliminate_pair_change_msgraph()
 
-        # Упрощаем дуги (удаляем усы)
-        # if method == 'arc':
-        #     for arc in self.arcs:
-        #         _simplify_arc(arc)
-
-        if logging_on:
+        if log:
             print('\nSimplification completed. {0} pairs eliminated.'.format(pairs_elimination_num))
 
     def print(self):
@@ -920,7 +889,7 @@ class TorusMesh:
             plt.quiver(x, y, X, Y, scale_units='x', angles='xy', scale=2)
         if draw_arcs:
             edges = []
-            for arc in self.arcs:
+            for arc in self.list_arcs():
                 if (cut is None) or self.is_arc_inner(arc, *cut): # Отбрасываем граничные дуги
                     for idx in range(len(arc) - 1):
                         edge = [self._coords(arc[idx]), self._coords(arc[idx + 1])]
@@ -948,20 +917,6 @@ class TorusMesh:
             plt.draw()
             plt.show()
 
-    def is_arc_inner(self, arc, x, y, lx, ly):
-        """
-        Проверяем, пересекает ли дуга границы заданного прямоугольника.
-        Проверка тупая: смотрим, попали ли в прямоугольник её концы.
-        :param arc: Дуга.
-        :param x: вершины (нижней левой) прямоугольника
-        :param y:
-        :param lx:
-        :param ly:
-        :return:
-        """
-        return x <= self._coords(arc[0])[1] <= lx and y <= self._coords(arc[0])[0] <= ly and \
-               x <= self._coords(arc[-1])[1] <= lx and y <= self._coords(arc[-1])[0] <= ly
-
 def test():
     """
     Максимум 27
@@ -975,25 +930,20 @@ def test():
     m.cmp_msgraph()
     m.cmp_arcs()
     m.cmp_persistent_pairs()
+    m.simplify_by_level(100, method='gradient')
     m.draw(draw_gradient=False, draw_arcs=True, draw_graph=False, draw_persistence_pairs=True)
 
 
 def test2():
-    import generators.matern
     import msmale.field_generator
+    i = 11
 
-    #centers = generators.matern.matern_point_process(0.05, 10, 3, 50)
-    #data = msmale.field_generator.gen_gaussian_sum_torus(50, 50, centers, 20)
-    data = msmale.field_generator.gen_bmp_field("D:/Dropbox/Макаренко/data/ao_1.bmp")
-    msmale.field_generator.perturb(data)
+    data = msmale.field_generator.gen_field_from_image('D:/Alexeev/data/magnetogram/{0}.bmp'.format(i), filetype='bmp', conditions='torus')
     m = TorusMesh(data.shape[0], data.shape[1])
     m.set_values(data)
-    # m.print()
-    # m.cmp_discrete_gradient()
-    # m.cmp_arcs()
-    # m.cmp_msgraph()
-    # m.cmp_persistent_pairs()
-
-    #m.simplify_by_percent(95, method='arc')
-
-    m.draw(draw_arcs=False, draw_gradient=False, draw_crit_pts=False, draw_persistence_pairs=False)
+    m.cmp_discrete_gradient()
+    m.cmp_msgraph()
+    m.cmp_arcs()
+    m.cmp_persistent_pairs()
+    m.simplify_by_level(70, method='arc')
+    m.draw(fname='D:/{0}_init.png'.format(i)) # cut=(0, 0, 400, 400)

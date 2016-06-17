@@ -1,6 +1,7 @@
 import numpy as np
 import numpy.random
 import scipy.stats
+import astropy.io.fits as fits
 from PIL import Image
 
 
@@ -79,7 +80,74 @@ def gen_sincos_field(rows_num, cols_num, kx, ky):
     return field
 
 
-def gen_bmp_field(filename, conditions='torus', compression=0.1, perturb_data=True):
+def gen_field_from_image(filename, filetype='bmp', conditions='torus', compression=10, perturb_data=True):
+    """
+    Построить сетку по BMP-изображению.
+    В узлах значения яркости в пикселе.
+    При склейке в тор изображение отражается вправо и вверх с заданным коэффициентом сжатия.
+    :param conditions: Граничные условия. 'torus' для склейки в тор, 'plain' — без склейки.
+    :param filename: Файл с BMP-изображением.
+    :param compression: Коэффициент сжатия картинки при склейке в тор. По умолчанию 10 (сжатие в десять раз).
+    :param perturb_data: Возмущение изображения (по умолчанию — True).
+    :return:
+    """
+    ALLOWABLE_FILETYPES = ('bmp', 'fits')
+    ALLOWABLE_CONDITIONS = ('torus', 'plain')
+
+    if filetype not in ALLOWABLE_FILETYPES:
+        raise AssertionError('Данный формат файла не поддерживается\n'
+                             'Допустимые форматы: {0}'.format(ALLOWABLE_FILETYPES))
+
+    if conditions not in ALLOWABLE_CONDITIONS:
+        raise AssertionError('Неверно заданы граничные условия.\n'
+                             'Допустимы следующие варианты: {0}'.format(ALLOWABLE_CONDITIONS))
+
+    is_torus_conditions = (conditions == 'torus')
+
+    if is_torus_conditions and compression <= 0:
+        raise AssertionError('Коэффициент сжатия должен быть положительным!')
+
+    if filetype == 'bmp':
+        with Image.open(filename) as bmp_image:
+            image = bmp_image.convert('L')
+            image = image.transpose(Image.FLIP_LEFT_RIGHT)
+            image = image.transpose(Image.ROTATE_180)
+
+            if is_torus_conditions:
+                extension_x = int(image.size[0] / compression)
+                extension_y = int(image.size[1] / compression)
+                # Расширяем изображение
+                new_image = Image.new('L', (image.size[0] + extension_x, image.size[1] + extension_y))
+                new_image.paste(image, (0, 0))
+                horizontal_image = image.resize((extension_x, image.size[1])).transpose(Image.FLIP_LEFT_RIGHT)
+                new_image.paste(horizontal_image, (image.size[0], 0))
+                vertical_image = image.resize((image.size[0], extension_y)).transpose(Image.FLIP_TOP_BOTTOM)
+                new_image.paste(vertical_image, (0, image.size[1]))
+                rotated_image = image.resize((extension_x, extension_y)).transpose(Image.ROTATE_180)
+                new_image.paste(rotated_image, image.size)
+            else:
+                new_image = image
+            field = np.array(new_image, dtype=float)
+
+            if perturb_data:
+                perturb(field)
+
+            return field
+    elif filetype == 'fits':
+        with fits.open(filename, mode='readonly') as fits_image:
+            image = fits_image[0].data
+            if is_torus_conditions:
+                rotated_image = np.rot90(image, k=2)
+                rotated_image = rotated_image[::compression, ::compression]
+                horizontal_image = image[::-1, ::compression]
+                vertical_image = image[::compression, ::-1]
+                image = np.hstack((np.vstack((image, vertical_image)), np.vstack((horizontal_image, rotated_image))))
+            if perturb_data:
+                perturb(image)
+            return image
+
+
+def gen_fits_field(filename, conditions='torus', compression=0.1, perturb_data=True):
     """
     Построить сетку по BMP-изображению.
     В узлах значения яркости в пикселе.
@@ -90,39 +158,6 @@ def gen_bmp_field(filename, conditions='torus', compression=0.1, perturb_data=Tr
     :param perturb_data: Возмущение изображения (по умолчанию — True).
     :return:
     """
-    if conditions not in ['torus', 'plain']:
-        raise AssertionError('Неверно заданы граничные условия!')
-
-    is_torus_conditions = (conditions == 'torus')
-
-    if is_torus_conditions and compression <= 0:
-        raise AssertionError('Коэффициент сжатия должен быть положительным!')
-
-    with Image.open(filename) as image:
-        image = image.convert('L')
-        image = image.transpose(Image.FLIP_LEFT_RIGHT)
-        image = image.transpose(Image.ROTATE_180)
-
-        if is_torus_conditions:
-            extension_x = int(image.size[0] * compression)
-            extension_y = int(image.size[1] * compression)
-            # Расширяем изображение
-            new_image = Image.new('L', (image.size[0] + extension_x, image.size[1] + extension_y))
-            new_image.paste(image, (0, 0))
-            horizontal_image = image.resize((extension_x, image.size[1])).transpose(Image.FLIP_LEFT_RIGHT)
-            new_image.paste(horizontal_image, (image.size[0], 0))
-            vertical_image = image.resize((image.size[0], extension_y)).transpose(Image.FLIP_TOP_BOTTOM)
-            new_image.paste(vertical_image, (0, image.size[1]))
-            rotated_image = image.resize((extension_x, extension_y)).transpose(Image.ROTATE_180)
-            new_image.paste(rotated_image, image.size)
-        else:
-            new_image = image
-        field = np.array(new_image, dtype=float)
-
-        if perturb_data:
-            perturb(field)
-
-        return field
 
 
 def perturb(field, eps=0.000001):
