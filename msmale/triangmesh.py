@@ -13,6 +13,17 @@ class TriangMesh:
     def __init__(self, lx, ly, conditions='torus'):
         """
         Создание сетки с нулевыми значениями в клетках.
+        Расположение осей:
+        0------Y
+        |
+        |
+        |
+        X
+        Индексация:
+        0      1      ...  ly
+        ly     ly + 1 ...  2 * ly
+        ...    ...    ...  ...
+        ...    ...    ...  ...
         :param lx: Размер сетки по X
         :param ly: Размер сетки по Y
         :return:
@@ -24,13 +35,16 @@ class TriangMesh:
         self.fields = list()  # Список полей, определённых на данной сетке
         if conditions == 'torus':
             self._generate_torus_edges()
+        self.jacobi_set = list()
+        print('Mesh of size {0}x{1} created'.format(lx, ly))
 
     def _generate_torus_edges(self):
-        self.hor_edges = [(row * self.sizeX + idx, row * self.sizeX + (idx + 1) % self.sizeX)
-                      for idx in range(self.sizeX) for row in range(self.sizeY)]
-        self.ver_edges = [(idx * self.sizeX + col, ((idx + 1) % self.sizeY) * self.sizeX + col)
-                           for idx in range(self.sizeY) for col in range(self.sizeX)]
-        self.diag_edges = [(idx, ((idx + 1) % self.sizeX) + ((idx // self.sizeX + 1) % self.sizeY) * self.sizeX)
+        self.hor_edges = [(row * self.sizeY + idx, row * self.sizeY + (idx + 1) % self.sizeY)
+                          for idx in range(self.sizeY) for row in range(self.sizeX)]
+        self.ver_edges = [(idx * self.sizeY + col, ((idx + 1) % self.sizeX) * self.sizeY + col)
+                          for idx in range(self.sizeX) for col in range(self.sizeY)]
+        self.diag_edges = [(idx,
+                            (((idx + 1) % self.sizeY) + ((idx // self.sizeY + 1) % self.size) * self.sizeY) % self.size)
                            for idx in range(self.size)]
 
     def set_field(self, field):
@@ -39,6 +53,7 @@ class TriangMesh:
         """
         self.fields.append(field)
 
+    @functools.lru_cache(maxsize=None)
     def value(self, field_idx, vert_idx):
         """
         Значение по глобальному индексу вершины для данного поля.
@@ -47,17 +62,19 @@ class TriangMesh:
         """
         return self.fields[field_idx][self.coordy(vert_idx), self.coordx(vert_idx)]
 
+    @functools.lru_cache(maxsize=6)
     def coordx(self, idx):
         """
         Координата X вершины
         """
-        return idx % self.sizeX
+        return idx % self.sizeY
 
+    @functools.lru_cache(maxsize=6)
     def coordy(self, idx):
         """
         Координата Y вершины
         """
-        return idx // self.sizeX
+        return idx // self.sizeY
 
     def edges(self):
         """
@@ -81,25 +98,25 @@ class TriangMesh:
         """
         Левый сосед вершины с заданным индексом
         """
-        return idx - idx % self.sizeX + (idx + self.sizeX - 1) % self.sizeX
+        return idx - idx % self.sizeY + (idx + self.sizeY - 1) % self.sizeY
 
     def _vright(self, idx):
         """
         Правый сосед вершины с заданным индексом
         """
-        return idx - idx % self.sizeX + (idx + 1) % self.sizeX
+        return idx - idx % self.sizeY + (idx + 1) % self.sizeY
 
     def _vtop(self, idx):
         """
         Верхний сосед вершины с заданным индексом
         """
-        return (idx + self.size - self.sizeX) % self.size
+        return (idx + self.size - self.sizeY) % self.size
 
     def _vbottom(self, idx):
         """
         Нижний сосед вершины с заданным индексом
         """
-        return (idx + self.sizeX) % self.size
+        return (idx + self.sizeY) % self.size
 
     def _hor_edgelink(self, edge):
         """
@@ -128,40 +145,60 @@ class TriangMesh:
         """
         return self._vright(edge[0]), self._vleft(edge[1])
 
-    def cmp_jacobi_set(self, field_idx1=0, field_idx2=1, eps=0.001):
+    def cmp_jacobi_set(self, field_idx1=0, field_idx2=1, eps=None, log=False):
         """
         Вычисление множества Якоби для сетки на плоскости.
         Подробности алгоритма см. в статье
         Jacobi Sets of Multiple Morse Functions.
         H. Edelsbrunner, J. Harer.
+        :param log: Включить текстовый вывод.
+        :param eps: Если значения поля на концах ребра отличается менее, чем на eps,
+                    они считается равными.
         :param field_idx1: Индекс первого поля.
         :param field_idx2: Индекс второго поля.
         :return:
         """
         result = []
+        use_epsilon = eps is not None
 
-        def check_edge(e, link):
-            if self.value(field_idx2, e[0]) - self.value(field_idx2, e[1]) < eps:
-                def phi(idx):
-                    return self.value(field_idx2, idx)
+        def check_edge(e, link, use_epsilon=False):
+            dif_field1 = self.value(field_idx1, e[1]) - self.value(field_idx1, e[0])
+            dif_field2 = self.value(field_idx2, e[1]) - self.value(field_idx2, e[0])
+            if use_epsilon and np.abs(self.value(field_idx2, e[1]) - self.value(field_idx2, e[0])) < eps:
+                # Если функция g равна на концах ребра, то \phi = g
+                phi_a = self.value(field_idx2, link[0])
+                phi_b = self.value(field_idx2, link[1])
+                phi_u = self.value(field_idx2, e[0])
+            elif use_epsilon and np.abs(self.value(field_idx1, e[1]) - self.value(field_idx1, e[0])) < eps:
+                # Если функция f равна на концах ребра, то \phi = f
+                phi_a = self.value(field_idx1, link[0])
+                phi_b = self.value(field_idx1, link[1])
+                phi_u = self.value(field_idx1, e[0])
             else:
-                l = (self.value(field_idx1, e[0]) - self.value(field_idx1, e[1]))\
-                    / (self.value(field_idx2, e[0]) - self.value(field_idx2, e[1]))
+                # Ищем коэффициент l = \lambda такой, что
+                # функция \phi = f + \lambda * g принимает одинаковые значения на концах ребра
+                l = -dif_field1 / dif_field2
 
-                def phi(idx):
-                    return self.value(field_idx1, idx) + l * self.value(field_idx2, idx)
+                phi_a = self.value(field_idx1, link[0]) + l * self.value(field_idx2, link[0])
+                phi_b = self.value(field_idx1, link[1]) + l * self.value(field_idx2, link[1])
+                phi_u = self.value(field_idx1, e[0]) + l * self.value(field_idx2, e[0])
 
-            if (phi(e[0]) - phi(link[0])) * (phi(e[0]) - phi(link[1])) > 0:
+            # если в нижнем линке ребра uv относительно функции \phi
+            # ноль или две точки, то ребро принадлежит множеству Якоби
+            if not (phi_u - phi_a > 0) ^ (phi_u - phi_b > 0):
                 result.append(e)
 
+        print('Horizontal edges...')
         for edge in self.hor_edges:
-            check_edge(edge, self._hor_edgelink(edge))
+            check_edge(edge, self._hor_edgelink(edge), use_epsilon=use_epsilon)
+        print('Vertical edges...')
         for edge in self.ver_edges:
-            check_edge(edge, self._ver_edgelink(edge))
+            check_edge(edge, self._ver_edgelink(edge), use_epsilon=use_epsilon)
+        print('Diagonal edges...')
         for edge in self.diag_edges:
-            check_edge(edge, self._diag_edgelink(edge))
-
-        return result
+            check_edge(edge, self._diag_edgelink(edge), use_epsilon=use_epsilon)
+        print('Completed.')
+        self.jacobi_set = result
 
     def _is_edge_internal(self, edge):
         """
@@ -169,7 +206,7 @@ class TriangMesh:
         :param edge: Ребро.
         :return:
         """
-        return edge[0] < edge[1] and edge[0] % self.sizeX <= edge[1] % self.sizeX
+        return edge[0] < edge[1] and edge[0] % self.sizeY <= edge[1] % self.sizeY
 
     def _construct_collection(self, edges):
         """
@@ -178,31 +215,18 @@ class TriangMesh:
         :return: LineCollection.
         """
         return mc.LineCollection(map(lambda e: tuple(map(self._coords, e)),
-                               [e for e in edges if self._is_edge_internal(e)]), colors='k', linewidths=1)
+                                     [e for e in edges if self._is_edge_internal(e)]), colors='k', linewidths=1)
 
-    def draw(self, field_idx=0, draw_jacobi_set=(0, 1)):
+    def draw(self, field_idx=0, draw_grid=False, annotate_points=False, draw_jacobi_set=(0, 1)):
         plt.style.use('ggplot')
         plt.imshow(self.fields[field_idx])
-        #plt.gca().add_collection(self._construct_collection(list(self.edges())))
-        plt.gca().add_collection(self._construct_collection(self.cmp_jacobi_set()))
+        plt.xlim((-1, self.sizeY))
+        plt.ylim((-1, self.sizeX))
+        if draw_grid:
+            plt.gca().add_collection(self._construct_collection(list(self.edges())))
+        if annotate_points:
+            for idx in range(self.size):
+                plt.text(*self._coords(idx), str(idx))
+        if draw_jacobi_set:
+            plt.gca().add_collection(self._construct_collection(self.jacobi_set))
         plt.show()
-
-import msmale.field_generator as gen
-
-field1 = np.genfromtxt(fname='../smalldata/hgt_200.csv', delimiter=' ')
-field2 = np.genfromtxt(fname='../smalldata/hgt_300.csv', delimiter=' ')
-# gen.perturb(field1)
-# gen.perturb(field2)
-
-t = TriangMesh(*reversed(field1.shape))
-t.set_field(field1)
-t.set_field(field2)
-t.draw(field_idx=0)
-# field2 = np.recfromcsv('smalldata/hgt_300.csv')
-
-
-
-# t = TriangMesh(5, 5)
-# t.set_field(np.zeros((5, 5)))
-# t.draw()
-# print(list(t.edges()))
