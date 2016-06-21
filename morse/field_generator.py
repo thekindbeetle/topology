@@ -3,6 +3,15 @@ import numpy.random
 import scipy.stats
 import astropy.io.fits as fits
 from PIL import Image
+from scipy.ndimage.filters import gaussian_filter
+
+ALLOWABLE_CONDITIONS = ('torus', 'plain')
+
+
+def _check_conditions(text):
+    if text not in ALLOWABLE_CONDITIONS:
+        raise AssertionError('Неверно заданы граничные условия.\n'
+                             'Допустимы следующие варианты: {0}'.format(ALLOWABLE_CONDITIONS))
 
 
 def gen_gaussian_sum_rectangle(rows_num, cols_num, centers, sigma):
@@ -93,18 +102,12 @@ def gen_field_from_image(filename, filetype='bmp', conditions='torus', compressi
     :return:
     """
     ALLOWABLE_FILETYPES = ('bmp', 'fits')
-    ALLOWABLE_CONDITIONS = ('torus', 'plain')
 
     if filetype not in ALLOWABLE_FILETYPES:
         raise AssertionError('Данный формат файла не поддерживается\n'
                              'Допустимые форматы: {0}'.format(ALLOWABLE_FILETYPES))
-
-    if conditions not in ALLOWABLE_CONDITIONS:
-        raise AssertionError('Неверно заданы граничные условия.\n'
-                             'Допустимы следующие варианты: {0}'.format(ALLOWABLE_CONDITIONS))
-
+    _check_conditions(conditions)
     is_torus_conditions = (conditions == 'torus')
-
     if is_torus_conditions and compression <= 0:
         raise AssertionError('Коэффициент сжатия должен быть положительным!')
 
@@ -146,6 +149,24 @@ def gen_field_from_image(filename, filetype='bmp', conditions='torus', compressi
             if perturb_data:
                 perturb(image)
             return image
+
+
+def resize(field, multipliers=(10, 10), sigma=(25, 25), conditions='plain'):
+    """
+    Расширение массива с последующим сглаживанием Гауссовским фильтром.
+    :param conditions: граничные условия, накладываемые при применении фильтра.
+    :param field: Входные данные.
+    :param multipliers: Коэффициенты расширения изображения по осям.
+    :param sigma: Ширина Гауссовского фильтра по осям.
+    :return:
+    """
+    _check_conditions(conditions)
+    new_field = np.concatenate(
+        [np.concatenate([np.full(multipliers, field[i, j], dtype=field.dtype)
+                         for i in range(field.shape[0])], axis=0)
+         for j in range(field.shape[1])], axis=1)
+    new_field = gaussian_filter(new_field, sigma)
+    return new_field
 
 
 def perturb(field, eps=0.000001):
