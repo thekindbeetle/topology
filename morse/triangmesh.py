@@ -4,6 +4,9 @@ import numpy as np
 import functools
 
 
+CONDITIONS = ('torus', 'plain', 'cylinder_x', 'cylinder_y')
+
+
 class TriangMesh:
     """
     Треугольная сетка.
@@ -35,17 +38,59 @@ class TriangMesh:
         self.fields = list()  # Список полей, определённых на данной сетке
         if conditions == 'torus':
             self._generate_torus_edges()
+        elif conditions == 'plain':
+            self._generate_plain_edges()
+        elif conditions == 'cylinder_x':
+            self._generate_cylinder_x_edges()
+        elif conditions == 'cylinder_y':
+            self._generate_cylinder_y_edges()
         self.jacobi_set = list()
         print('Mesh of size {0}x{1} created'.format(lx, ly))
 
     def _generate_torus_edges(self):
+        """
+        Набор рёбер, соответствующий сетке на торе.
+        :return:
+        """
         self.hor_edges = [(row * self.sizeY + idx, row * self.sizeY + (idx + 1) % self.sizeY)
                           for idx in range(self.sizeY) for row in range(self.sizeX)]
-        self.ver_edges = [(idx * self.sizeY + col, ((idx + 1) % self.sizeX) * self.sizeY + col)
-                          for idx in range(self.sizeX) for col in range(self.sizeY)]
+        self.ver_edges = [(idx, (idx + self.sizeY) % self.size) for idx in range(self.size)]
         self.diag_edges = [(idx,
                             (((idx + 1) % self.sizeY) + ((idx // self.sizeY + 1) % self.size) * self.sizeY) % self.size)
                            for idx in range(self.size)]
+
+    def _generate_plain_edges(self):
+        """
+        Набор рёбер, соответствующий сетке на прямоугольнике.
+        :return:
+        """
+        self.hor_edges = [(idx, idx + 1) for idx in range(self.size) if (idx + 1) % self.sizeY]
+        self.ver_edges = [(idx, idx + self.sizeY) for idx in range(self.size - self.sizeY)]
+        self.diag_edges = [(idx, idx + self.sizeY + 1) for idx in range(self.size - self.sizeY - 1)
+                           if (idx + 1) % self.sizeY]
+
+    def _generate_cylinder_x_edges(self):
+        """
+        Набор рёбер, соответствующий сетке на цилиндре (склейка по верхней границе).
+        :return:
+        """
+        self.hor_edges = [(idx, idx + 1) for idx in range(self.size) if (idx + 1) % self.sizeY]
+        self.ver_edges = [(idx, (idx + self.sizeY) % self.size) for idx in range(self.size)]
+        self.diag_edges = [(idx, (idx + self.sizeY + 1) % self.size) for idx in range(self.size)
+                           if (idx + 1) % self.sizeY]
+
+    def _generate_cylinder_y_edges(self):
+        """
+        Набор рёбер, соответствующий сетке на цилиндре (склейка по боковой границе).
+        :return:
+        """
+        self.hor_edges = [(row * self.sizeY + idx, row * self.sizeY + (idx + 1) % self.sizeY)
+                          for idx in range(self.sizeY) for row in range(self.sizeX)]
+        self.ver_edges = [(idx, idx + self.sizeY) for idx in range(self.size - self.sizeY)]
+        self.diag_edges = [(idx,
+                            (((idx + 1) % self.sizeY) + ((idx // self.sizeY + 1) % self.size) * self.sizeY) % self.size)
+                           for idx in range(self.size - self.sizeY)]
+
 
     def set_field(self, field):
         """
@@ -230,3 +275,9 @@ class TriangMesh:
         if draw_jacobi_set:
             plt.gca().add_collection(self._construct_collection(self.jacobi_set))
         plt.show()
+
+field = np.zeros((3, 4))
+t = TriangMesh(3, 4, conditions='cylinder_y')
+print(t.hor_edges)
+print(t.ver_edges)
+print(t.diag_edges)

@@ -1,7 +1,7 @@
 import numpy as np
 
 
-class UnionFind:
+class _UnionFind:
     """
     Union-Find data structure.
     """
@@ -64,19 +64,3 @@ class UnionFind:
 
     def __repr__(self):
         return str(self._parent)
-
-def test():
-    uf = UnionFind(10)
-    for i in range(10):
-        uf.makeset(i)
-    print(uf)
-    uf.union(2, 4)
-    uf.union(2, 7)
-    uf.union(7, 4)
-    uf.union(9, 5)
-    uf.union(1, 5)
-    print(uf.find(5))
-    print(uf.find(7))
-    uf.union(5, 7)
-    print(uf.find(5))
-    print(uf)

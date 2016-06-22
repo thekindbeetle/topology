@@ -31,7 +31,7 @@ def gen_gaussian_sum_rectangle(rows_num, cols_num, centers, sigma):
     return field
 
 
-def gen_gaussian_sum_torus(rows_num, cols_num, centers, sigma, logging_on=True):
+def gen_gaussian_sum_torus(rows_num, cols_num, centers, sigma, log=True):
     """
     Матрица, являющаяся суммой гауссиан на торе.
     Считаем значения гауссиан за пределами 3-сигма нулевыми.
@@ -39,10 +39,10 @@ def gen_gaussian_sum_torus(rows_num, cols_num, centers, sigma, logging_on=True):
     :param cols_num: количество столбцов матрицы
     :param centers: список центров (не обязательно целочисленных, могут даже лежать за пределами матрицы!)
     :param sigma: ширина гауссиан
-    :param logging_on: Включить текстовый вывод
+    :param log: Включить текстовый вывод
     :return:
     """
-    if logging_on:
+    if log:
         print('Generation started...')
     field = np.zeros((rows_num, cols_num))
     sigma3 = int(sigma * 3)
@@ -51,7 +51,7 @@ def gen_gaussian_sum_torus(rows_num, cols_num, centers, sigma, logging_on=True):
         for j in range(-sigma3, sigma3 + 1):
             if i ** 2 + j ** 2 <= sigma3:
                 gaussian[i, j] += scipy.stats.multivariate_normal.pdf((i, j), mean=(0, 0), cov=((sigma, 0), (0, sigma)))
-    if logging_on:
+    if log:
         print('Gaussian values computed, summing...', end='')
 
     checkpoints_num = 20
@@ -60,7 +60,7 @@ def gen_gaussian_sum_torus(rows_num, cols_num, centers, sigma, logging_on=True):
     for i in range(len(centers)):
         center = centers[i]
 
-        if logging_on and i > len(centers) * current_checkpoint / checkpoints_num:
+        if log and i > len(centers) * current_checkpoint / checkpoints_num:
             current_checkpoint += 1
             print('.', end='')
 

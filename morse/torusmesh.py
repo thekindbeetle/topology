@@ -4,7 +4,7 @@ import numpy as np
 import heapq
 from bitarray import bitarray
 from collections import deque
-import morse.unionfind
+import morse._unionfind
 import copy
 import re
 
@@ -580,7 +580,7 @@ class TorusMesh:
         # Строим отображение критических точек в индекс битового массива меток
         idx_reverse = {self.cr_cells[cidx]: cidx for cidx in range(len(self.cr_cells))}
 
-        uf = morse.unionfind.UnionFind(critical_cells_num)
+        uf = morse._unionfind._UnionFind(critical_cells_num)
 
         # Cчитаем, что к этому моменту массив критических точек представляет собой фильтрацию.
         for i in range(len(self.cr_cells)):
