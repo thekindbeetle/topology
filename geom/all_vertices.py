@@ -28,20 +28,15 @@ class AllVertices:
         self.incidEdges = [[] for i in range(len(vertices))]
         self.incidTriangles = [[] for i in range(len(vertices))]
 
+    def __getitem__(self, item):
+        return self.vertices.__getitem__(item)
+
     def count(self):
         """
         Количество вершин
         :return:
         """
         return len(self.vertices)
-
-    def get_vert(self, idx):
-        """
-        Вершина с заданным индексом
-        :param idx: индекс вершины
-        :return:
-        """
-        return self.vertices[idx]
 
     def inc_edges_of_vert(self, idx):
         """
@@ -124,8 +119,8 @@ class AllVertices:
         """
         self.boardVertices = []
         for edge_idx in edges.boardEdges:
-            v0 = edges.get_edge(edge_idx).v(0)
-            v1 = edges.get_edge(edge_idx).v(1)
+            v0 = edges[edge_idx].v(0)
+            v1 = edges[edge_idx].v(1)
             if v0 not in self.boardVertices:
                 self.boardVertices.append(v0)
             if v1 not in self.boardVertices:

@@ -3,6 +3,7 @@ import geom.vert
 import geom.edge
 import geom.triang
 import triangle
+import numpy as np
 
 
 class AllTriangles:
@@ -24,6 +25,9 @@ class AllTriangles:
         # Создание пустого массива списков ребер, инцидентных треугольникам
         self.incidEdges = [[] for i in range(len(self.triangles))]
 
+    def __getitem__(self, item):
+        return self.triangles.__getitem__(item)
+
     def count(self):
         """
         Количество треугольников в триангуляции в текущий момент.
@@ -32,17 +36,14 @@ class AllTriangles:
         """
         return len(self.triangles)
 
-    def get_triangle(self, triang_idx):
-        return self.triangles[triang_idx]
-
     def a_vert_of_triang(self, triang_idx):
-        return self.triangles[triang_idx].v(0)
+        return self[triang_idx].v(0)
 
     def b_vert_of_triang(self, triang_idx):
-        return self.triangles[triang_idx].v(1)
+        return self[triang_idx].v(1)
 
     def c_vert_of_triang(self, triang_idx):
-        return self.triangles[triang_idx].v(2)
+        return self[triang_idx].v(2)
 
     def incident_edges_of_triangle(self, triang_idx):
         return self.incidEdges[triang_idx]
@@ -50,19 +51,29 @@ class AllTriangles:
     # TODO: ускорить работу процедуры
     def get_all_edges(self):
         edges = [] # список рёбер
+        # Индексируем рёбра для быстрого поиска
+        edges_idx = dict()
+        # edges_idx = np.zeros((len(self.triangles * 3), len(self.triangles * 3)), dtype=bool)
+
         idx = 0
 
         # внешность не учитываем
         for triang_idx in range(self.count()):
             tr = self.triangles[triang_idx]
-            if not geom.edge.Edge.contains_edge(edges, tr.v(0), tr.v(1)):
+            if not edges_idx.get((tr.v(0), tr.v(1))):
                 edges.append(geom.edge.Edge(idx, tr.v(0), tr.v(1)))
+                edges_idx[(tr.v(0), tr.v(1))] = True
+                edges_idx[(tr.v(1), tr.v(0))] = True
                 idx += 1
-            if not geom.edge.Edge.contains_edge(edges, tr.v(0), tr.v(2)):
+            if not edges_idx.get((tr.v(0), tr.v(2))):
                 edges.append(geom.edge.Edge(idx, tr.v(0), tr.v(2)))
+                edges_idx[(tr.v(0), tr.v(2))] = True
+                edges_idx[(tr.v(2), tr.v(0))] = True
                 idx += 1
-            if not geom.edge.Edge.contains_edge(edges, tr.v(2), tr.v(1)):
-                edges.append(geom.edge.Edge(idx, tr.v(2), tr.v(1)))
+            if not edges_idx.get((tr.v(1), tr.v(2))):
+                edges.append(geom.edge.Edge(idx, tr.v(1), tr.v(2)))
+                edges_idx[(tr.v(1), tr.v(2))] = True
+                edges_idx[(tr.v(2), tr.v(1))] = True
                 idx += 1
         return edges
 
@@ -98,8 +109,8 @@ class AllTriangles:
             for j in range(iAEdgesCount):
                 # Глобальный индекс j-ого ребра инцидентного вершине A i-ого треугольника.
                 iAj = vertices.inc_edges_of_vert(self.a_vert_of_triang(i))[j]
-                if(edges.get_edge(iAj).equals(self.a_vert_of_triang(i), self.b_vert_of_triang(i)) or
-                   edges.get_edge(iAj).equals(self.a_vert_of_triang(i), self.c_vert_of_triang(i))):
+                if(edges[iAj].equals(self.a_vert_of_triang(i), self.b_vert_of_triang(i)) or
+                   edges[iAj].equals(self.a_vert_of_triang(i), self.c_vert_of_triang(i))):
                     self.incidEdges[i].append(iAj)
             # Количество ребер, инцидентных вершине B треугольника i.
             iBEdgesCount = vertices.count_of_inc_edges_of_vert(self.b_vert_of_triang(i))#
@@ -109,7 +120,7 @@ class AllTriangles:
             for j in range(iBEdgesCount):
                 # Глобальный индекс j-ого ребра инцидентного вершине B i-ого треугольника.
                 iBj = vertices.inc_edges_of_vert(self.b_vert_of_triang(i))[j]
-                if(edges.get_edge(iBj).equals(self.b_vert_of_triang(i),self.c_vert_of_triang(i))):
+                if edges[iBj].equals(self.b_vert_of_triang(i), self.c_vert_of_triang(i)):
                     self.incidEdges[i].append(iBj)
 
     def print(self):
@@ -121,6 +132,7 @@ class AllTriangles:
             print("t[{0}]:".format(i))
             for e in self.incidEdges[i]:
                 print(e)
+
 
 def test():
     verts = [
@@ -140,3 +152,4 @@ def test():
     # verts.append(geom.vert.Vert(5, 10.0, 11.0))
     # verts.append(geom.vert.Vert(6, -1.0, 8.0))
     AllTriangles(verts).print()
+    print(AllTriangles(verts).get_all_edges())

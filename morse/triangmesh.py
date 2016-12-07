@@ -262,22 +262,33 @@ class TriangMesh:
         return mc.LineCollection(map(lambda e: tuple(map(self._coords, e)),
                                      [e for e in edges if self._is_edge_internal(e)]), colors='k', linewidths=1)
 
-    def draw(self, field_idx=0, draw_grid=False, annotate_points=False, draw_jacobi_set=(0, 1)):
+    def draw(self, field_idx=0, draw_image=True, draw_grid=False, annotate_points=False, fname=None, draw_jacobi_set=(0, 1)):
         plt.style.use('ggplot')
-        plt.imshow(self.fields[field_idx])
+        plt.figure(figsize=(25.1, 35.4), dpi=100)
+        ax = plt.gca()
+        if draw_image:
+            # plt.imshow(self.fields[field_idx])
+            plt.pcolor(self.fields[field_idx])
+            plt.colorbar()
         plt.xlim((-1, self.sizeY))
         plt.ylim((-1, self.sizeX))
         if draw_grid:
-            plt.gca().add_collection(self._construct_collection(list(self.edges())))
+            ax.add_collection(self._construct_collection(list(self.edges())))
         if annotate_points:
             for idx in range(self.size):
-                plt.text(*self._coords(idx), str(idx))
+                ax.text(*self._coords(idx), str(idx))
         if draw_jacobi_set:
-            plt.gca().add_collection(self._construct_collection(self.jacobi_set))
-        plt.show()
+            ax.add_collection(self._construct_collection(self.jacobi_set))
+        if fname:
+            plt.savefig(fname)
+            plt.close()
+#
+# field = np.zeros((3, 4))
+# t = TriangMesh(3, 4, conditions='cylinder_y')
+# t.set_field(field)
+# print(t.hor_edges)
+# print(t.ver_edges)
+# print(t.diag_edges)
+# t.draw(draw_grid=True)
+# plt.show()
 
-field = np.zeros((3, 4))
-t = TriangMesh(3, 4, conditions='cylinder_y')
-print(t.hor_edges)
-print(t.ver_edges)
-print(t.diag_edges)

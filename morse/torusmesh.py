@@ -668,7 +668,7 @@ class TorusMesh:
         :param log: Включить текстовый вывод.
         :return:
         """
-        # Если пар не осталось, то скоращать нечего.
+        # Если пар не осталось, то сокращать нечего.
         if not self.ppairs:
             print("Список персистентных пар пуст!")
             return
@@ -851,10 +851,10 @@ class TorusMesh:
              draw_gradient=False,
              draw_arcs=True,
              draw_graph=False,
+             draw_image=True,
              fname=None,
              cut=None):
         plt.figure()
-
         if cut is None:
             plt.gca().set_xlim(0, self.sizeY)
             plt.gca().set_ylim(0, self.sizeX)
@@ -864,8 +864,9 @@ class TorusMesh:
 
         figManager = plt.get_current_fig_manager()
         figManager.window.showMaximized()
-        cur_plot = plt.pcolor(self.values, cmap="Greys")
-        plt.colorbar(cur_plot)
+        if draw_image:
+            cur_plot = plt.pcolor(self.values, cmap="Greys")
+            plt.colorbar(cur_plot)
         if draw_graph:
             edges = []
             for cidx in self.cr_cells:
@@ -913,9 +914,6 @@ class TorusMesh:
         if fname:
             plt.savefig(fname)
             plt.close()
-        else:
-            plt.draw()
-            plt.show()
 
 def test():
     """
@@ -938,7 +936,7 @@ def test2():
     import morse.field_generator
     i = 11
 
-    data = morse.field_generator.gen_field_from_image('D:/Alexeev/data/magnetogram/{0}.bmp'.format(i), filetype='bmp', conditions='torus')
+    data = morse.field_generator.gen_field_from_file('D:/Alexeev/data/magnetogram/{0}.bmp'.format(i), filetype='bmp', conditions='torus')
     m = TorusMesh(data.shape[0], data.shape[1])
     m.set_values(data)
     m.cmp_discrete_gradient()

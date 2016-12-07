@@ -1,4 +1,6 @@
 import math
+import matplotlib.pyplot as plt
+import matplotlib.collections as mc
 import geom.all_vertices
 import geom.all_edges
 import geom.all_triangles
@@ -60,11 +62,11 @@ class Filtration:
 
         # Добавление вершин, ребер, треугольников, внешности
         for i in range(self.vertNum):
-            self.simplexes.append(self.vertices.get_vert(i))
+            self.simplexes.append(self.vertices[i])
         for i in range(self.edgeNum):
-            self.simplexes.append(self.edges.get_edge(i))
+            self.simplexes.append(self.edges[i])
         for i in range(self.trNum):
-            self.simplexes.append(self.triangles.get_triangle(i))
+            self.simplexes.append(self.triangles[i])
 
         # Инициализация времен появления
         for s in self.simplexes:
@@ -84,7 +86,6 @@ class Filtration:
         :return:
         """
         return self.simplexes[filtr_index]
-
 
     def get_min_app_time(self):
         """
@@ -108,8 +109,8 @@ class Filtration:
         tr_glob_indexes = self.edges.incident_triangles_of_edge(edge.globInd)
         global_tr_idx_0 = tr_glob_indexes[0]
         global_tr_idx_1 = tr_glob_indexes[1]
-        filt_tr_idx_0 = self.triangles.get_triangle(global_tr_idx_0).filtInd
-        filt_tr_idx_1 = self.triangles.get_triangle(global_tr_idx_1).filtInd
+        filt_tr_idx_0 = self.triangles[global_tr_idx_0].filtInd
+        filt_tr_idx_1 = self.triangles[global_tr_idx_1].filtInd
         return [filt_tr_idx_0, filt_tr_idx_1]
 
     def sort_simplexes(self):
@@ -132,3 +133,14 @@ class Filtration:
     def print_min_max(self):
         print("Minimal appearance time: {0}".format(self.get_min_app_time()))
         print("Maximal appearance time: {0}".format(self.get_max_app_time()))
+
+    def draw(self):
+        """
+        Отображение фильтрации в виде триангуляции.
+        :return:
+        """
+        plt.figure()
+        lines = list(map(lambda e: [self.vertices[e.v(0)].point, self.vertices[e.v(1)].point], self.edges))
+        lc = mc.LineCollection(lines, colors='k', linewidths=1, zorder=1)
+        plt.gca().add_collection(lc)
+        plt.plot()

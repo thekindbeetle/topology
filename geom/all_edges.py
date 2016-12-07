@@ -24,20 +24,15 @@ class AllEdges:
 #        print("Edges count: {0}".format(self.count()))
         self.incidTriangles = [[] for i in range(len(self.edges))]
 
+    def __getitem__(self, item):
+        return self.edges.__getitem__(item)
+
     def count(self):
         """
         Количество рёбер триангуляции
         :return:
         """
         return len(self.edges)
-
-    def get_edge(self, idx):
-        """
-        Ребро триангуляции по индексу
-        :param idx: глобальный индекс ребра
-        :return:
-        """
-        return self.edges[idx]
 
     def get_0_vert_of_edge(self, idx):
         """

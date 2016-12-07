@@ -89,19 +89,19 @@ def gen_sincos_field(rows_num, cols_num, kx, ky):
     return field
 
 
-def gen_field_from_image(filename, filetype='bmp', conditions='torus', compression=10, perturb_data=True):
+def gen_field_from_file(filename, filetype='bmp', conditions='torus', compression=10, perturb_data=True):
     """
     Построить сетку по изображению.
     В узлах значения яркости в пикселе.
     При склейке в тор изображение отражается вправо и вверх с заданным коэффициентом сжатия.
-    :param filetype: Тип файла (BMP или FITS).
+    :param filetype: Тип файла (BMP, FITS или ASC).
     :param conditions: Граничные условия. 'torus' для склейки в тор, 'plain' — без склейки.
     :param filename: Файл с изображением.
     :param compression: Коэффициент сжатия картинки при склейке в тор. По умолчанию 10 (сжатие в десять раз).
     :param perturb_data: Возмущение изображения (по умолчанию — True).
     :return:
     """
-    ALLOWABLE_FILETYPES = ('bmp', 'fits')
+    ALLOWABLE_FILETYPES = ('bmp', 'fits', 'asc')
 
     if filetype not in ALLOWABLE_FILETYPES:
         raise AssertionError('Данный формат файла не поддерживается\n'
@@ -149,6 +149,14 @@ def gen_field_from_image(filename, filetype='bmp', conditions='torus', compressi
             if perturb_data:
                 perturb(image)
             return image
+    elif filetype == 'asc':
+        grid = np.loadtxt(filename, skiprows=6)
+        if is_torus_conditions:
+            grid = np.hstack((np.vstack((grid[:, :], grid[::-compression, :])),
+                              np.vstack((grid[:, ::-compression], grid[::-compression, ::-compression]))))
+        if perturb_data:
+            perturb(grid)
+        return grid
 
 
 def resize(field, multipliers=(10, 10), sigma=(25, 25), conditions='plain'):

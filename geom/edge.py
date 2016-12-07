@@ -38,11 +38,11 @@ class Edge:
         :param vertices: множество вершин триангуляции
         :return:
         """
-        a = vertices.get_vert(self.v0).point
-        b = vertices.get_vert(self.v1).point
+        a = vertices[self.v0].point
+        b = vertices[self.v1].point
         return geom.util.dist(a, b)
 
-    def set_appearance_time( self, vertices, edges, triangles ):
+    def set_appearance_time(self, vertices, edges, triangles):
         self.appTime = self.get_length(vertices) / 2
 
     def equals( self, v0, v1 ):

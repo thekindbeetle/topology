@@ -61,16 +61,22 @@ class Persistence:
         self.init_components_data() # инициализация данных о компонентах связности
 
     def get_diagram(self):
-        diagram = []
+        """
+        Диаграмма персистентности.
+        :return: набор времён рождения, набор времён смерти.
+        """
+        x, y = [], []
         for idx in range(len(self._cycleBirthTimes)):
             if self._cycleBirthTimes[idx] != -1 and self._cycleDeathTimes[idx] != -1:
-                diagram.append([self._cycleBirthTimes[idx], self._cycleDeathTimes[idx]])
-        return diagram
+                x.append(self._cycleBirthTimes[idx])
+                y.append(self._cycleDeathTimes[idx])
+        return x, y
 
-    def union(self, i, j):
+    def _union(self, i, j):
         """
         Слияние компонент связности, содержащих треугольники с номерами i и j в
-        фильтрации Умирает тот, кто позже родился, т. е. с меньшим индексом
+        фильтрации.
+        Умирает тот, кто позже родился, т. е. с меньшим индексом
         (т. к. проходим фильтрацию с конца)
         :param i: номер треугольника в фильтрации
         :param j: номер треугольника в фильтрации
@@ -78,9 +84,12 @@ class Persistence:
         """
         parent_i = self.find(i)
         parent_j = self.find(j)
-        for k in range(len(self._parentOfSimplex)):
-            if self._parentOfSimplex[k] == min(parent_i, parent_j):
-                self._parentOfSimplex[k] = max(parent_i, parent_j)
+        min_parent = min(parent_i, parent_j)
+        max_parent = max(parent_i, parent_j)
+        self._parentOfSimplex[min_parent] = max_parent
+        # for k in range(len(self._parentOfSimplex)):
+        #     if self._parentOfSimplex[k] == min_parent:
+        #         self._parentOfSimplex[k] = max_parent
 
     def find(self, i):
         """
@@ -90,7 +99,7 @@ class Persistence:
         """
         curr_idx = i
         while self._parentOfSimplex[curr_idx] != curr_idx:
-            curr_idx = self._parentOfSimplex[curr_idx];
+            curr_idx = self._parentOfSimplex[curr_idx]
         return curr_idx
 
     def init_cycles_data(self):
@@ -135,7 +144,7 @@ class Persistence:
                     self._cycleBirthTimes[min(self.find(tr_filt_idx_0), self.find(tr_filt_idx_1))] =\
                             self.filtration.get_simplex(filt_idx).appTime
                     # Объединение компонент
-                    self.union(tr_filt_idx_0, tr_filt_idx_1)
+                    self._union(tr_filt_idx_0, tr_filt_idx_1)
                     curr_cycles_num -= 1  # число циклов увеличилось на 1
             self.numOfCycles[filt_idx - 1] = curr_cycles_num     # количество циклов на текущем уровне
 
@@ -179,8 +188,8 @@ class Persistence:
                 glob_v_idx_1 = self.filtration.get_simplex(filt_idx).v(1)
 
                 # По ним ищем идексы вершин в фильтрации
-                filt_v_idx_0 = self.filtration.vertices.get_vert(glob_v_idx_0).filtInd
-                filt_v_idx_1 = self.filtration.vertices.get_vert(glob_v_idx_1).filtInd
+                filt_v_idx_0 = self.filtration.vertices[glob_v_idx_0].filtInd
+                filt_v_idx_1 = self.filtration.vertices[glob_v_idx_1].filtInd
 
                 # Проверяем, граничит ли ребро с разными компонентами связности
                 if self.find(filt_v_idx_0) != self.find(filt_v_idx_1):
@@ -200,7 +209,7 @@ class Persistence:
                         curr_big_comp_num += 1
 
                     # Объединяем компоненты
-                    self.union(filt_v_idx_0, filt_v_idx_1)
+                    self._union(filt_v_idx_0, filt_v_idx_1)
 
                     # При слиянии компонент старшая поглощает младшую.
                     # К количеству точек в старшей добавляется количество точек младшей компоненты.

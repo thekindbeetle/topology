@@ -41,27 +41,27 @@ class Triang:
 
     def edge0( self, edges, triangs ):
         edge_idx = triangs.incident_edges_of_triangle(self.globInd)[0]
-        return edges.get_edge(edge_idx)
+        return edges[edge_idx]
 
     def edge1( self, edges, triangs ):
         edge_idx = triangs.incident_edges_of_triangle(self.globInd)[1]
-        return edges.get_edge(edge_idx)
+        return edges[edge_idx]
 
     def edge2( self, edges, triangs ):
         edge_idx = triangs.incident_edges_of_triangle(self.globInd)[2]
-        return edges.get_edge(edge_idx)
+        return edges[edge_idx]
 
     def edges( self, e, t ):
         res = []
         edges = t.incedentEdgesOfTriangle(self.globInd)
         for i in range(len(e)) :
-            res.append(e.get_edge(edges[i]))
+            res.append(e[edges[i]])
         return res
 
     def get_triang( self, vertices ):
-        a = vertices.get_vert(self.v0).point
-        b = vertices.get_vert(self.v1).point
-        c = vertices.get_vert(self.v2).point
+        a = vertices[self.v0].point
+        b = vertices[self.v1].point
+        c = vertices[self.v2].point
         return [a, b, c]
 
     def outer_radius( self, vertices ):
@@ -145,7 +145,7 @@ class Out(Triang):
         :param triangles:
         :return:
         """
-        self.appTime = max([triangles.get_triangle(i).appTime for i in range(triangles.count() - 1)]) + 1 # исключая внешность
+        self.appTime = max([triangles[i].appTime for i in range(triangles.count() - 1)]) + 1 # исключая внешность
 
     def v( self, idx ):
         return self.verts[idx]
