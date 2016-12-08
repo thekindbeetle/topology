@@ -32,20 +32,7 @@ class Edge:
     def __repr__(self):
         return "Edge #{0}, [{1}, {2}]".format(self.globInd, self.v0, self.v1)
 
-    def get_length( self, vertices ):
-        """
-        Длина ребра
-        :param vertices: множество вершин триангуляции
-        :return:
-        """
-        a = vertices[self.v0].point
-        b = vertices[self.v1].point
-        return geom.util.dist(a, b)
-
-    def set_appearance_time(self, vertices, edges, triangles):
-        self.appTime = self.get_length(vertices) / 2
-
-    def equals( self, v0, v1 ):
+    def equals(self, v0, v1):
         """
         Проверка, являются ли v0 и v1 вершинами данного ребра
         :param v0:
@@ -57,7 +44,7 @@ class Edge:
     def v( self, idx ):
         return self.v0 if idx == 0 else self.v1
 
-    def equals_by_global_idx( self, simplex ):
+    def equals_by_global_idx(self, simplex):
         """
         Сравнение с другим симплексом по глобальному индексу.
         :param simplex: двугой симплекс
@@ -65,7 +52,7 @@ class Edge:
         """
         return simplex.globInd == self.globInd
 
-    def compare_to( self, simplex ):
+    def compare_to(self, simplex):
         """
         Сравнить с другим симплексом по времени появления в фильтрации
         :param simplex:

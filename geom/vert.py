@@ -28,13 +28,13 @@ class Vert:
     def __repr__(self):
         return "Vertex #{0}, ({1}, {2})".format(self.globInd, self.point[0], self.point[1])
 
-    def set_appearance_time( self, vertices, edges, triangles ):
-        self.appTime = 0
+    def __getitem__(self, item):
+        return self.point.__getitem__(item)
 
-    def v( self, idx ):
+    def v(self, idx):
         return self.globInd
 
-    def equals_by_global_idx( self, simplex ):
+    def equals_by_global_idx(self, simplex):
         """
         Сравнение с другим симплексом по глобальному индексу.
         :param simplex: двугой симплекс
@@ -42,7 +42,7 @@ class Vert:
         """
         return simplex.globInd == self.globInd
 
-    def compare_to( self, simplex ):
+    def compare_to(self, simplex):
         """
         Сравнить с другим симплексом по времени появления в фильтрации
         :param simplex:

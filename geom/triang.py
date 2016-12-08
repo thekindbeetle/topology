@@ -38,55 +38,37 @@ class Triang:
 
     def __repr__(self):
         return "Triangle #{0}, [{1}, {2}, {3}]".format(self.globInd, self.v0, self.v1, self.v2)
+    #
+    # def edge0(self, edges, triangs):
+    #     edge_idx = triangs.incident_edges_of_triangle(self.globInd)[0]
+    #     return edges[edge_idx]
+    #
+    # def edge1(self, edges, triangs):
+    #     edge_idx = triangs.incident_edges_of_triangle(self.globInd)[1]
+    #     return edges[edge_idx]
+    #
+    # def edge2(self, edges, triangs):
+    #     edge_idx = triangs.incident_edges_of_triangle(self.globInd)[2]
+    #     return edges[edge_idx]
+    #
+    # def edges(self, e, t):
+    #     res = []
+    #     edges = t.incedentEdgesOfTriangle(self.globInd)
+    #     for i in range(len(e)) :
+    #         res.append(e[edges[i]])
+    #     return res
 
-    def edge0( self, edges, triangs ):
-        edge_idx = triangs.incident_edges_of_triangle(self.globInd)[0]
-        return edges[edge_idx]
-
-    def edge1( self, edges, triangs ):
-        edge_idx = triangs.incident_edges_of_triangle(self.globInd)[1]
-        return edges[edge_idx]
-
-    def edge2( self, edges, triangs ):
-        edge_idx = triangs.incident_edges_of_triangle(self.globInd)[2]
-        return edges[edge_idx]
-
-    def edges( self, e, t ):
-        res = []
-        edges = t.incedentEdgesOfTriangle(self.globInd)
-        for i in range(len(e)) :
-            res.append(e[edges[i]])
-        return res
-
-    def get_triang( self, vertices ):
+    def get_triang(self, vertices):
         a = vertices[self.v0].point
         b = vertices[self.v1].point
         c = vertices[self.v2].point
         return [a, b, c]
 
-    def outer_radius( self, vertices ):
+    def outer_radius(self, vertices):
         tr = self.get_triang(vertices)
         return geom.util.outer_radius(tr[0], tr[1], tr[2])
 
-    def set_appearance_time( self, vertices, edges, triangles ):
-        """
-        Установить время появления симплекса в фильтрации
-        :param vertices:
-        :param edges:
-        :param triangles:
-        :return:
-        """
-        # длины сторон треугольника
-        a = self.edge0(edges, triangles).get_length(vertices)
-        b = self.edge1(edges, triangles).get_length(vertices)
-        c = self.edge2(edges, triangles).get_length(vertices)
-
-        if geom.util.is_obtuse(a, b, c):
-            self.appTime = max(a, b, c) / 2
-        else:
-            self.appTime = geom.util.outer_radius_by_sides(a, b, c)
-
-    def v( self, idx ):
+    def v(self, idx):
         """
         Вершина треугольника по индексу 0..2
         :param idx: индекс вершины в треугольнике
@@ -99,7 +81,7 @@ class Triang:
         elif idx == 2:
             return self.v2
 
-    def equals_by_global_idx( self, simplex ):
+    def equals_by_global_idx(self, simplex):
         """
         Сравнение с другим симплексом по глобальному индексу.
         :param simplex: двугой симплекс
@@ -107,7 +89,7 @@ class Triang:
         """
         return simplex.globInd == self.globInd
 
-    def compare_to( self, simplex ):
+    def compare_to(self, simplex):
         """
         Сравнить с другим симплексом по времени появления в фильтрации
         :param simplex:
@@ -137,17 +119,7 @@ class Out(Triang):
     def __repr__(self):
         return "Outer face #{0}: {1}".format(self.globInd, self.verts)
 
-    def set_appearance_time( self, vertices, edges, triangles ):
-        """
-        Устанавливаем внешности максимальное время появления
-        :param vertices:
-        :param edges:
-        :param triangles:
-        :return:
-        """
-        self.appTime = max([triangles[i].appTime for i in range(triangles.count() - 1)]) + 1 # исключая внешность
-
-    def v( self, idx ):
+    def v(self, idx):
         return self.verts[idx]
 
 def test():

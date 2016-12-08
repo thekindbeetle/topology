@@ -2,7 +2,7 @@ from scipy.stats import *
 import numpy as np
 
 
-def poisson_homogeneous_point_process(rate, dx, dy=None, logging_on=True, point_num=None):
+def poisson_homogeneous_point_process(rate, dx, dy=None, logging_on=False, point_num=None):
     """
     Реализация пуассоновского однородного точечного процесса в прямоугольной области.
     :param point_num: явно указать количество создаваемых точек

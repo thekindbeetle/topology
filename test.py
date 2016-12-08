@@ -3,9 +3,6 @@ import generators.poisson
 import generators.matern
 import generators.thomas
 import geom.vert
-import geom.all_vertices
-import geom.all_edges
-import geom.all_triangles
 import geom.persistence.filtration
 import geom.persistence.persistence
 import triangle

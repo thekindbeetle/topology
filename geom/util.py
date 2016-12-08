@@ -1,6 +1,7 @@
 import math
 
-def is_obtuse( len_a, len_b, len_c ):
+
+def is_obtuse(len_a, len_b, len_c):
     """
     Является ли треугольник с заданным соотношением сторон тупоугольным
     :param len_a: длина первой стороны
@@ -16,7 +17,7 @@ def is_obtuse( len_a, len_b, len_c ):
         return len_b**2 + len_a**2 < len_c**2
 
 
-def triangle_area( len_a, len_b, len_c ):
+def triangle_area(len_a, len_b, len_c):
     """
     Площадь треугольника, вычисленная по сторонам по формуле Герона.
     :param len_a: длина первой стороны
@@ -38,7 +39,7 @@ def dist( pt_a, pt_b ):
     return math.hypot(pt_a[0] - pt_b[0], pt_a[1] - pt_b[1])
 
 
-def inner_product( vect_1, vect_2 ):
+def inner_product(vect_1, vect_2):
     """
     Скалярное произведение векторов в R^2
     :param vect_1:
@@ -48,7 +49,7 @@ def inner_product( vect_1, vect_2 ):
     return vect_1[0] * vect_2[0] + vect_1[1] * vect_2[1]
 
 
-def angle( a, b, c ):
+def angle(a, b, c):
     """
     Величина угла abc
     :param a:
@@ -59,7 +60,7 @@ def angle( a, b, c ):
     return math.acos(inner_product([a[0] - b[0], a[1] - b[1]], [c[0] - b[0], c[1] - b[1]]) / dist(b, a) / dist(b, c))
 
 
-def outer_radius( pt_a, pt_b, pt_c ):
+def outer_radius(pt_a, pt_b, pt_c):
     """
     Радиус окружности, проходящей через три точки [x, y]
     :param pt_a: первая точка
@@ -70,7 +71,7 @@ def outer_radius( pt_a, pt_b, pt_c ):
     return dist(pt_a, pt_b) / math.sin(angle(pt_a, pt_c, pt_b)) / 2
 
 
-def outer_radius_by_sides( len_a, len_b, len_c ):
+def outer_radius_by_sides(len_a, len_b, len_c):
     """
     Радиус описанной окружности около треугольника с данными сторонами
     :param len_a: длина первой стороны
@@ -79,6 +80,7 @@ def outer_radius_by_sides( len_a, len_b, len_c ):
     :return:
     """
     return float(len_a * len_b * len_c) * 0.25 / triangle_area(len_a, len_b, len_c)
+
 
 def test():
     pt1 = [0, 0]

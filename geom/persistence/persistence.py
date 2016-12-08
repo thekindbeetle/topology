@@ -1,7 +1,4 @@
 import geom.vert
-import geom.all_vertices
-import geom.all_edges
-import geom.all_triangles
 import geom.persistence.filtration
 
 
@@ -182,7 +179,8 @@ class Persistence:
                 points_count_in_component[filt_idx] = 1
                 curr_comp_num += 1  # Число компонент связности увеличилось на 1
             elif dim == 1:
-                # Если текущий симлекс - ребро, возможны 2 варианта: оно граничит с двумя компонентами связности или с одной.
+                # Если текущий симлекс - ребро, возможны 2 варианта:
+                # оно граничит с двумя компонентами связности или с одной.
                 # Глобальные индексы вершин данного ребра:
                 glob_v_idx_0 = self.filtration.get_simplex(filt_idx).v(0)
                 glob_v_idx_1 = self.filtration.get_simplex(filt_idx).v(1)
@@ -232,8 +230,12 @@ class Persistence:
         #     }
         # }
 
+
 def test():
-    verts = [
+    import matplotlib.pyplot as plt
+    import numpy as np
+
+    points = [
         [1.0, 1.0],
         [2.0, 1.0],
         [2.0, 2.0],
@@ -242,16 +244,9 @@ def test():
         [10.0, 11.0],
         [-1.0, 8.0]
     ]
-    vertices = geom.all_vertices.AllVertices([geom.vert.Vert(idx, verts[idx][0], verts[idx][1]) for idx in range(len(verts))])
-    triangles = geom.all_triangles.AllTriangles(verts)
-    edges = geom.all_edges.AllEdges(triangles)
-    vertices.init_inc_edges(edges)
-    vertices.init_inc_triangles(triangles)
-    triangles.init_incident_edges(vertices, edges)
-    edges.init_incident_triangles(triangles)
-    edges.init_board_edges()
-    vertices.init_board_vertices(edges)
-    triangles.add_out(vertices, edges)
-    f = geom.persistence.filtration.Filtration(vertices, edges, triangles)
+    plt.plot(*np.transpose(points), 'ok')
+    f = geom.persistence.filtration.Filtration(points)
     f.print()
     pers = Persistence(f)
+    print(pers._compBirthTimes)
+    print(pers._compDeathTimes)
