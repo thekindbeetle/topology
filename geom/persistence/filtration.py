@@ -1,4 +1,5 @@
 import math
+import numpy as np
 import geom.util
 import matplotlib.pyplot as plt
 import matplotlib.collections as mc
@@ -65,27 +66,40 @@ class Filtration:
     # Количество треугольников
     trNum = None
 
-    def __init__(self, points):
+    def __init__(self):
+        self.vertices = []
+        self.edges = []
+        self.triangles = []
+        self.incidEdgesToVertices = []
+        self.incidTrianglesToVertices = []
+        self.boardVertices = []
+        self.incidTrianglesToEdges = []
+        self.boardEdges = []
+        self.incidEdgesToTriangles = []
+        self.simplexes = []
+
+    @classmethod
+    def from_points(cls, x, y):
         """
         Построение фильтрации Чеха по набору точек из R^2.
         :param points:
         :return:
         """
-        self.vertNum = len(points)
+        if len(x) != len(y):
+            raise RuntimeError('Длины x и y должны совпадать!')
+        f = Filtration()
+        f.vertNum = len(x)
 
         # Индексирование вершин, рёбер и треугольников
-        self.vertices = [geom.vert.Vert(idx, points[idx][0], points[idx][1]) for idx in range(self.vertNum)]
-        self.incidEdgesToVertices = [[] for i in range(self.vertNum)]
-        self.incidTrianglesToVertices = [[] for i in range(self.vertNum)]
+        f.vertices = [geom.vert.Vert(idx, x[idx], y[idx]) for idx in range(f.vertNum)]
+        f.incidEdgesToVertices = [[] for i in range(f.vertNum)]
+        f.incidTrianglesToVertices = [[] for i in range(f.vertNum)]
 
-        tr = triangle.delaunay(points)
-        self.trNum = len(tr)
+        tr = triangle.delaunay(np.transpose([x, y]))
+        f.trNum = len(tr)
 
-        self.triangles = [geom.triang.Triang(idx, tr[idx][0], tr[idx][1], tr[idx][2]) for idx in range(self.trNum)]
-        self.incidEdgesToTriangles = [[] for i in range(self.trNum)]
-
-        # Инициализируем список рёбер
-        self.edges = []
+        f.triangles = [geom.triang.Triang(idx, tr[idx][0], tr[idx][1], tr[idx][2]) for idx in range(f.trNum)]
+        f.incidEdgesToTriangles = [[] for i in range(f.trNum)]
 
         # Индексируем рёбра для быстрого поиска
         edges_idx = dict()
@@ -93,149 +107,211 @@ class Filtration:
         idx = 0
 
         # внешность не учитываем
-        for triIdx in range(self.trNum):
-            tr = self.triangles[triIdx]
+        for triIdx in range(f.trNum):
+            tr = f.triangles[triIdx]
             if not edges_idx.get((tr.v(0), tr.v(1))):
-                self.edges.append(geom.edge.Edge(idx, tr.v(0), tr.v(1)))
+                f.edges.append(geom.edge.Edge(idx, tr.v(0), tr.v(1)))
                 edges_idx[(tr.v(0), tr.v(1))] = True
                 edges_idx[(tr.v(1), tr.v(0))] = True
                 idx += 1
             if not edges_idx.get((tr.v(0), tr.v(2))):
-                self.edges.append(geom.edge.Edge(idx, tr.v(0), tr.v(2)))
+                f.edges.append(geom.edge.Edge(idx, tr.v(0), tr.v(2)))
                 edges_idx[(tr.v(0), tr.v(2))] = True
                 edges_idx[(tr.v(2), tr.v(0))] = True
                 idx += 1
             if not edges_idx.get((tr.v(1), tr.v(2))):
-                self.edges.append(geom.edge.Edge(idx, tr.v(1), tr.v(2)))
+                f.edges.append(geom.edge.Edge(idx, tr.v(1), tr.v(2)))
                 edges_idx[(tr.v(1), tr.v(2))] = True
                 edges_idx[(tr.v(2), tr.v(1))] = True
                 idx += 1
 
-        self.edgeNum = len(self.edges)
-        self.incidTrianglesToEdges = [[] for i in range(self.edgeNum)]
+        f.edgeNum = len(f.edges)
+        f.incidTrianglesToEdges = [[] for i in range(f.edgeNum)]
 
         # Инициализация списков инцидентных рёбер для вершин
         # Пробегаем все ребра, каждое приписываем двум его вершинам.
         # Результат: массив, индексы которого - глоальные номера точек,
         # в i-ой ячейке - список индексов ребер, инцедентных i-ой вершине.
-        for idx in range(self.edgeNum):
-            v0 = self.edges[idx].v(0)
-            v1 = self.edges[idx].v(1)
-            self.incidEdgesToVertices[v0].append(idx)
-            self.incidEdgesToVertices[v1].append(idx)
+        for idx in range(f.edgeNum):
+            v0 = f.edges[idx].v(0)
+            v1 = f.edges[idx].v(1)
+            f.incidEdgesToVertices[v0].append(idx)
+            f.incidEdgesToVertices[v1].append(idx)
 
         # Инициализация списков инцидентных треугольников для вершин
         # Пробегаем все треугольники, каждый записываем в 3 списка,
         # соответствующих вершинам этого треугольника.
         # Результат: массив, индексы которого - глоальные номера точек,
         # в i-й ячейке - список индексов треугольников, содержащих i-ую вершину.
-        for idx in range(self.trNum):
-            self.incidTrianglesToVertices[self.triangles[idx].v(0)].append(idx)
-            self.incidTrianglesToVertices[self.triangles[idx].v(1)].append(idx)
-            self.incidTrianglesToVertices[self.triangles[idx].v(2)].append(idx)
+        for idx in range(f.trNum):
+            f.incidTrianglesToVertices[f.triangles[idx].v(0)].append(idx)
+            f.incidTrianglesToVertices[f.triangles[idx].v(1)].append(idx)
+            f.incidTrianglesToVertices[f.triangles[idx].v(2)].append(idx)
 
         # Инициализация списков инцидентных рёбер для треугольников
         # Пробегаем все треугольники
-        for i in range(self.trNum):
+        for i in range(f.trNum):
             # Количество ребер, инцидентных вершине A треугольника i.
-            iAEdgesCount = len(self.incidEdgesToVertices[self.triangles[i].v(0)])
+            iAEdgesCount = len(f.incidEdgesToVertices[f.triangles[i].v(0)])
             # Для i-ого треугольника просматриваем список инцедентных ребер вершины A.
             # Если текущее (j-ое) ребро равно ребру AB или AC i-ого треугольника,
             # добавляем это ребро в список ребер, инцедентных i-ому треугольнику.
             for j in range(iAEdgesCount):
                 # Глобальный индекс j-ого ребра инцидентного вершине A i-ого треугольника.
-                iAj = self.incidEdgesToVertices[self.triangles[i].v(0)][j]
-                if(self.edges[iAj].equals(self.triangles[i].v(0), self.triangles[i].v(1)) or
-                   self.edges[iAj].equals(self.triangles[i].v(0), self.triangles[i].v(2))):
-                    self.incidEdgesToTriangles[i].append(iAj)
+                iAj = f.incidEdgesToVertices[f.triangles[i].v(0)][j]
+                if(f.edges[iAj].equals(f.triangles[i].v(0), f.triangles[i].v(1)) or
+                   f.edges[iAj].equals(f.triangles[i].v(0), f.triangles[i].v(2))):
+                    f.incidEdgesToTriangles[i].append(iAj)
             # Количество ребер, инцидентных вершине B треугольника i.
-            iBEdgesCount = len(self.incidEdgesToVertices[self.triangles[i].v(1)])
+            iBEdgesCount = len(f.incidEdgesToVertices[f.triangles[i].v(1)])
             # Для i-ого треугольника просматриваем список инцедентных ребер вершины B.
             # Если текущее (j-ое) ребро равно ребру BC i-ого треугольника,
             # добавляем это ребро в список ребер, инцедентных i-ому треугольнику.
             for j in range(iBEdgesCount):
                 # Глобальный индекс j-ого ребра инцидентного вершине B i-ого треугольника.
-                iBj = self.incidEdgesToVertices[self.triangles[i].v(1)][j]
-                if self.edges[iBj].equals(self.triangles[i].v(1), self.triangles[i].v(2)):
-                    self.incidEdgesToTriangles[i].append(iBj)
+                iBj = f.incidEdgesToVertices[f.triangles[i].v(1)][j]
+                if f.edges[iBj].equals(f.triangles[i].v(1), f.triangles[i].v(2)):
+                    f.incidEdgesToTriangles[i].append(iBj)
 
         # Инициализация списка инцидентных треугольников для рёбер
         # Пробегаем все треугольники, каждый записываем в 3 списка,
         # соответствующих ребрам этого треугольника.
         # Результат: массив, индексы которого - глобальные номера ребер,
         # в i-ой ячейке - список индексов треугольников, инцедентных i-ому ребру.
-        for i in range(self.trNum):
-            self.incidTrianglesToEdges[self.incidEdgesToTriangles[i][0]].append(i)
-            self.incidTrianglesToEdges[self.incidEdgesToTriangles[i][1]].append(i)
-            self.incidTrianglesToEdges[self.incidEdgesToTriangles[i][2]].append(i)
+        for i in range(f.trNum):
+            f.incidTrianglesToEdges[f.incidEdgesToTriangles[i][0]].append(i)
+            f.incidTrianglesToEdges[f.incidEdgesToTriangles[i][1]].append(i)
+            f.incidTrianglesToEdges[f.incidEdgesToTriangles[i][2]].append(i)
 
         # Инициализация списка граничных рёбер
-        self.boardEdges = []
-        for edge_idx in range(self.edgeNum):
-            if len(self.incidTrianglesToEdges[edge_idx]) == 1:
-                self.boardEdges.append(edge_idx)
+        for edge_idx in range(f.edgeNum):
+            if len(f.incidTrianglesToEdges[edge_idx]) == 1:
+                f.boardEdges.append(edge_idx)
 
         # Инициализация списка граничных вершин
-        self.boardVertices = []
-        for edge_idx in self.boardEdges:
-            v0 = self.edges[edge_idx].v(0)
-            v1 = self.edges[edge_idx].v(1)
-            if v0 not in self.boardVertices:
-                self.boardVertices.append(v0)
-            if v1 not in self.boardVertices:
-                self.boardVertices.append(v1)
+        for edge_idx in f.boardEdges:
+            v0 = f.edges[edge_idx].v(0)
+            v1 = f.edges[edge_idx].v(1)
+            if v0 not in f.boardVertices:
+                f.boardVertices.append(v0)
+            if v1 not in f.boardVertices:
+                f.boardVertices.append(v1)
 
         # Add outer face to the triangulation
-        outIdx = self.trNum
-        out = geom.triang.Out(outIdx, self.boardVertices)
-        self.triangles.append(out)
-        self.incidEdgesToTriangles.append(self.boardEdges)
+        outIdx = f.trNum
+        out = geom.triang.Out(outIdx, f.boardVertices)
+        f.triangles.append(out)
+        f.incidEdgesToTriangles.append(f.boardEdges)
 
-        for vert_idx in self.boardVertices:
-            self.incidTrianglesToVertices[vert_idx].append(outIdx)
+        for vert_idx in f.boardVertices:
+            f.incidTrianglesToVertices[vert_idx].append(outIdx)
 
-        for edge_idx in self.boardEdges:
-            self.incidTrianglesToEdges[edge_idx].append(outIdx)
+        for edge_idx in f.boardEdges:
+            f.incidTrianglesToEdges[edge_idx].append(outIdx)
 
-        self.trNum += 1  # учитываем внешность
+        f.trNum += 1  # учитываем внешность
 
-        self.simpNum = self.vertNum + self.edgeNum + self.trNum
-
-        self.simplexes = []
+        f.simpNum = f.vertNum + f.edgeNum + f.trNum
 
         # Добавление вершин, ребер, треугольников, внешности
-        for i in range(self.vertNum):
-            self.simplexes.append(self.vertices[i])
-        for i in range(self.edgeNum):
-            self.simplexes.append(self.edges[i])
-        for i in range(self.trNum):
-            self.simplexes.append(self.triangles[i])
+        for i in range(f.vertNum):
+            f.simplexes.append(f.vertices[i])
+        for i in range(f.edgeNum):
+            f.simplexes.append(f.edges[i])
+        for i in range(f.trNum):
+            f.simplexes.append(f.triangles[i])
 
         # Инициализация времен появления
-        for s in self.simplexes:
+        for s in f.simplexes:
             if s.dim == 0:
                 s.appTime = 0
             elif s.dim == 1:
-                length = geom.util.dist(self.vertices[s.v(0)], self.vertices[s.v(1)])
+                length = geom.util.dist(f.vertices[s.v(0)], f.vertices[s.v(1)])
                 s.appTime = length / 2
             elif s.dim == 2:
-                len_a = geom.util.dist(self.vertices[s.v(0)], self.vertices[s.v(1)])
-                len_b = geom.util.dist(self.vertices[s.v(0)], self.vertices[s.v(2)])
-                len_c = geom.util.dist(self.vertices[s.v(1)], self.vertices[s.v(2)])
+                len_a = geom.util.dist(f.vertices[s.v(0)], f.vertices[s.v(1)])
+                len_b = geom.util.dist(f.vertices[s.v(0)], f.vertices[s.v(2)])
+                len_c = geom.util.dist(f.vertices[s.v(1)], f.vertices[s.v(2)])
                 if geom.util.is_obtuse(len_a, len_b, len_c):
                     s.appTime = max([len_a, len_b, len_c]) / 2
                 else:
-                    s.appTime = geom.util.outer_radius(self.vertices[s.v(0)],
-                                                       self.vertices[s.v(1)],
-                                                       self.vertices[s.v(2)])
-        self.simplexes[-1].appTime = max([self.triangles[i].appTime for i in range(self.trNum - 1)]) + 1
+                    s.appTime = geom.util.outer_radius(f.vertices[s.v(0)],
+                                                       f.vertices[s.v(1)],
+                                                       f.vertices[s.v(2)])
+        f.simplexes[-1].appTime = max([f.triangles[i].appTime for i in range(f.trNum - 1)]) + 1
 
         # Сортировка списка симплексов по времени появления
-        self.sort_simplexes()
+        f.sort_simplexes()
 
         # Инициализация индексов фильтрации симплексов
-        for i in range(self.simpNum):
-            self.simplexes[i].filtInd = i
+        for i in range(f.simpNum):
+            f.simplexes[i].filtInd = i
+
+        return f
+        
+    @classmethod
+    def from_grid(cls, values):
+        """
+        Построение фильтрации по скалярному полю на плоскости.
+        :param values: NumPy Array
+        :return:
+        """
+        f = Filtration()
+        lx, ly = values.shape
+
+        f.vertNum = lx * ly
+        f.edgeNum = 3 * lx * ly - 2 * (lx + ly) + 1
+        f.trNum = 2 * (lx - 1) * (ly - 1)
+
+        horizEdgeNum = lx * (ly - 1)
+        verticalEdgeNum = ly * (lx - 1)
+        diagEdgeNum = (lx - 1) * (ly - 1)
+
+        for i in range(lx):
+            for j in range(ly):
+                v = geom.vert.Vert(ly * i + j, i, j)
+                v.appTime = values[i, j]
+                f.vertices.append(v)
+                # Горизонтальные рёбра
+                if j != 0:
+                    e = geom.edge.Edge(v.globInd - i, v.globInd - 1, v.globInd)
+                    e.appTime = max(f.vertices[v.globInd - 1].appTime, v.appTime)
+                    f.edges.append(e)
+                # Вертикальные рёбра
+                if i != 0:
+                    e = geom.edge.Edge(horizEdgeNum + v.globInd - ly, v.globInd - ly, v.globInd)
+                    e.appTime = max(f.vertices[v.globInd - ly].appTime, v.appTime)
+                    f.edges.append(e)
+                # Диагональные рёбра
+                if i != 0 and j != 0:
+                    e = geom.edge.Edge(horizEdgeNum + verticalEdgeNum + v.globInd - ly - i,
+                                       v.globInd - ly - 1, v.globInd)
+                    e.appTime = max(f.vertices[v.globInd - ly - 1].appTime, v.appTime)
+                    f.edges.append(e)
+
+        trCounter = 0
+
+        # Правые треугольники
+        for i in range(lx - 1):
+            for j in range(ly - 1):
+                t = geom.triang.Triang(trCounter, ly * i + j, ly * i + j + 1, ly * (i + 1) + j + 1)
+                t.appTime = max(f.vertices[ly * i + j].appTime,
+                                f.vertices[ly * i + j + 1].appTime,
+                                f.vertices[ly * (i + 1) + j + 1].appTime)
+                f.incidEdgesToTriangles.append([])
+                trCounter += 1
+
+        # Левые треугольники
+        for i in range(lx - 1):
+            for j in range(ly - 1):
+                t = geom.triang.Triang(trCounter, ly * i + j, ly * (i + 1) + j, ly * (i + 1) + j + 1)
+                t.appTime = max(f.vertices[ly * i + j].appTime,
+                                f.vertices[ly * (i + 1) + j].appTime,
+                                f.vertices[ly * (i + 1) + j + 1].appTime)
+                trCounter += 1
+
+        f.simplexes = f.vertices + f.edges + f.triangles
+        return f
 
     def get_simplex(self, filtr_index):
         """
@@ -304,15 +380,31 @@ class Filtration:
 
 def test():
     import numpy as np
+    # points = [
+    #     [1.0, 1.0],
+    #     [2.0, 1.0],
+    #     [2.0, 2.0],
+    #     [5.0, 7.0],
+    #     [9.0, 11.0],
+    #     [10.0, 11.0],
+    #     [-1.0, 8.0]
+    # ]
     points = [
-        [1.0, 1.0],
-        [2.0, 1.0],
-        [2.0, 2.0],
-        [5.0, 7.0],
-        [9.0, 11.0],
-        [10.0, 11.0],
-        [-1.0, 8.0]
+        [1.0, 1.0, 8.0],
+        [2.0, 1.0, 4.0],
+        [2.0, 2.0, 2.0],
+        [5.0, 7.0, 13.0],
+        [9.0, 11.0, 8.0],
+        [10.0, 11.0, -1.0],
+        [-1.0, 8.0, -5.0]
     ]
-    plt.plot(*np.transpose(points), 'ok')
-    f = Filtration(points)
+    plt.matshow(points)
+    # plt.plot(*np.transpose(points), 'ok')
+    # f = Filtration.from_points(points)
+    f = Filtration.from_grid(np.asarray(points))
+    # print(f.incidEdgesToTriangles)
+    # print(f.incidTrianglesToEdges)
     f.print()
+    f.draw()
+    plt.show()
+

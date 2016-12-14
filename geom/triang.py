@@ -38,25 +38,6 @@ class Triang:
 
     def __repr__(self):
         return "Triangle #{0}, [{1}, {2}, {3}]".format(self.globInd, self.v0, self.v1, self.v2)
-    #
-    # def edge0(self, edges, triangs):
-    #     edge_idx = triangs.incident_edges_of_triangle(self.globInd)[0]
-    #     return edges[edge_idx]
-    #
-    # def edge1(self, edges, triangs):
-    #     edge_idx = triangs.incident_edges_of_triangle(self.globInd)[1]
-    #     return edges[edge_idx]
-    #
-    # def edge2(self, edges, triangs):
-    #     edge_idx = triangs.incident_edges_of_triangle(self.globInd)[2]
-    #     return edges[edge_idx]
-    #
-    # def edges(self, e, t):
-    #     res = []
-    #     edges = t.incedentEdgesOfTriangle(self.globInd)
-    #     for i in range(len(e)) :
-    #         res.append(e[edges[i]])
-    #     return res
 
     def get_triang(self, vertices):
         a = vertices[self.v0].point

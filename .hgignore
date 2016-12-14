@@ -1,2 +1,6 @@
 syntax: regexp
 .idea/*
+alexeev/*
+data/*
+syntax:glob
+*.pyc

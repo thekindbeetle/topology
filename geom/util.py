@@ -29,7 +29,7 @@ def triangle_area(len_a, len_b, len_c):
     return math.sqrt(p * (p - len_a) * (p - len_b) * (p - len_c))
 
 
-def dist( pt_a, pt_b ):
+def dist(pt_a, pt_b):
     """
     Расстояние между двумя точками в R^2
     :param pt_a: первая точка

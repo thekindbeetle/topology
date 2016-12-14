@@ -4,6 +4,7 @@ import numpy as np
 import heapq
 from bitarray import bitarray
 from collections import deque
+
 import morse._unionfind
 import copy
 import re
@@ -566,12 +567,15 @@ class TorusMesh:
         for s in self.arcs.keys(): # Цикл по сёдлам
             self._cmp_arcs(s)
 
-    def cmp_persistent_pairs(self):
+    def cmp_persistent_pairs(self, log=False):
         """
         Вычисление персистентных пар.
         :return:
         """
         critical_cells_num = len(self.cr_cells) # Количество критических клеток
+
+        if log:
+            print('{0} critical points'.format(critical_cells_num))
 
         # Помечаем критические клетки как негативные (создающие цикл) или позитивные (убивающие цикл).
         # Метки критических клеток (негативная / позитивная)
@@ -617,6 +621,8 @@ class TorusMesh:
 
         # проходим по прямой фильтрации
         for i in range(critical_cells_num):
+            if log:
+                print('.', end='')
             cidx = self.cr_cells[i]
             # Смотрим только негативные сёдла
             if self.dim(cidx) == 1 and not signs[i]:
@@ -638,6 +644,8 @@ class TorusMesh:
 
         # проходим по обратной фильтрации
         for i in reversed(range(critical_cells_num)):
+            if log:
+                print('.', end='')
             cidx = self.cr_cells[i]
             # Смотрим только позитивные сёдла
             if self.dim(cidx) == 1 and signs[i]:
