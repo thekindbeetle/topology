@@ -28,7 +28,7 @@ def phi_empirical(x, y, plot=True, log=False, label="Empirical data"):
   pers = geom.persistence.persistence.Persistence(filt)
 
   def comp_num(level):
-      return len([x for x in pers._compDeathTimes if x >= level])
+    return len([x for x in pers._compDeathTimes if x >= level])
 
   def f(level):
     return comp_num(level / np.sqrt(pnum)) / (pnum - 1)
@@ -218,6 +218,8 @@ def test():
   plt.legend()
   plt.show()
 
-phi(10000, 20, plot=True, method='simple')
-plt.legend()
-plt.show()
+
+def test2():
+  phi(10000, 20, plot=True, method='simple')
+  plt.legend()
+  plt.show()
