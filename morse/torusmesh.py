@@ -855,6 +855,7 @@ class TorusMesh:
     def draw(self,
              draw_crit_pts=True,
              annotate_crit_points=False,
+             annotate_values=False,
              draw_persistence_pairs=False,
              draw_gradient=False,
              draw_arcs=True,
@@ -862,6 +863,30 @@ class TorusMesh:
              draw_image=True,
              fname=None,
              cut=None):
+        """
+        Draw mesh values.
+        :param annotate_values:
+            Annotate values at each point (use only with small fields).
+        :param draw_crit_pts:
+            Show critical points positions and types.
+        :param annotate_crit_points:
+            Annotate number of critical points in self.cr_cells.
+        :param draw_persistence_pairs:
+            Draw lines connecting persistence pairs of critical points.
+        :param draw_gradient:
+            Draw gradient arrows.
+        :param draw_arcs:
+            Draw arcs of MS-complex.
+        :param draw_graph:
+            Draw MS-graph.
+        :param draw_image:
+            Draw field on the background.
+        :param fname:
+            Save image to the PNG-file.
+        :param cut:
+            Tuple (minX, minY, maxX, maxY).
+            Cut part of image.
+        """
         plt.figure()
         if cut is None:
             plt.gca().set_xlim(0, self.sizeY)
@@ -873,7 +898,7 @@ class TorusMesh:
         figManager = plt.get_current_fig_manager()
         figManager.window.showMaximized()
         if draw_image:
-            cur_plot = plt.pcolor(self.values, cmap="Greys")
+            cur_plot = plt.pcolor(self.values, cmap="gray")
             plt.colorbar(cur_plot)
         if draw_graph:
             edges = []
@@ -913,6 +938,9 @@ class TorusMesh:
         if annotate_crit_points:
             for cidx in self.cr_cells:
                 plt.text(self._coords(cidx)[0], self._coords(cidx)[1], str(cidx))
+        if annotate_values:
+            for idx in range(self.size):
+                plt.text(self._coords(idx)[0], self._coords(idx)[1], '{:.2f}'.format(self.value(idx)))
         if draw_persistence_pairs:
             edges = []
             for pairs in self.ppairs:

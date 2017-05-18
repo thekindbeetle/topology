@@ -1,3 +1,4 @@
+import copy
 import numpy as np
 import numpy.random
 import scipy.stats
@@ -94,7 +95,7 @@ def gen_field_from_file(filename, filetype='bmp', conditions='torus', compressio
     Построить сетку по изображению.
     В узлах значения яркости в пикселе.
     При склейке в тор изображение отражается вправо и вверх с заданным коэффициентом сжатия.
-    :param filetype: Тип файла (BMP, FITS или ASC).
+    :param filetype: Тип файла (24bit-BMP, FITS или ASC).
     :param conditions: Граничные условия. 'torus' для склейки в тор, 'plain' — без склейки.
     :param filename: Файл с изображением.
     :param compression: Коэффициент сжатия картинки при склейке в тор. По умолчанию 10 (сжатие в десять раз).
@@ -157,6 +158,19 @@ def gen_field_from_file(filename, filetype='bmp', conditions='torus', compressio
         if perturb_data:
             perturb(grid)
         return grid
+
+
+def apply_conditions_to_field(field, conditions='torus', compression=10):
+    _check_conditions(conditions)
+    if conditions == 'torus':
+        rotated_image = np.rot90(field, k=2)
+        rotated_image = rotated_image[::compression, ::compression]
+        horizontal_image = field[::-1, ::compression]
+        vertical_image = field[::compression, ::-1]
+        newfield = np.hstack((np.vstack((field, vertical_image)), np.vstack((horizontal_image, rotated_image))))
+        return newfield
+    else:
+        return copy.deepcopy(field)
 
 
 def resize(field, multipliers=(10, 10), sigma=(25, 25), conditions='plain'):
