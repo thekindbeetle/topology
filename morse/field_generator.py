@@ -163,11 +163,12 @@ def gen_field_from_file(filename, filetype='bmp', conditions='torus', compressio
 def apply_conditions_to_field(field, conditions='torus', compression=10):
     _check_conditions(conditions)
     if conditions == 'torus':
+        print(field.shape)
+        bottom_image = field[:, ::-compression]
+        right_image = field[::-compression, :]
         rotated_image = np.rot90(field, k=2)
         rotated_image = rotated_image[::compression, ::compression]
-        horizontal_image = field[::-1, ::compression]
-        vertical_image = field[::compression, ::-1]
-        newfield = np.hstack((np.vstack((field, vertical_image)), np.vstack((horizontal_image, rotated_image))))
+        newfield = np.hstack((np.vstack((field, right_image)), np.vstack((bottom_image, rotated_image))))
         return newfield
     else:
         return copy.deepcopy(field)
@@ -210,6 +211,7 @@ def perturb(field, eps=0.000001):
         print("Field perturbed.")
     except ValueError:
         print("Error: field values differ less than epsilon value = {0}. Field was not perturbed.".format(eps))
+    return field
 
 
 def perturb2(field):

@@ -775,14 +775,14 @@ class TorusMesh:
         if log:
             print("Pair {0} eliminated".format(pair))
 
-    def simplify_by_level(self, level, method='gradient', logging_on=True):
+    def simplify_by_level(self, level, method='gradient', log=True):
         """
         Упрощение до заданного уровня.
         :param method: Метод, которым сокращаются персистентные пары.
             'gradient' — методом обращения градиента
             'arc' — методом восстановления дуг
         :param level: Уровень, до которого сокращаем персистентные пары.
-        :param logging_on: Текстовый вывод.
+        :param log: Текстовый вывод.
         :return:
         """
         possible_methods = ('gradient', 'arc')
@@ -793,11 +793,11 @@ class TorusMesh:
         checkpoints_num = 20
         current_checkpoint = 0
 
-        if logging_on:
+        if log:
             print('Simplification...', end='')
 
         for i in range(pairs_elimination_num):
-            if logging_on and i > pairs_elimination_num * current_checkpoint / checkpoints_num:
+            if log and i > pairs_elimination_num * current_checkpoint / checkpoints_num:
                 current_checkpoint += 1
                 print('.', end='')
 
@@ -811,7 +811,7 @@ class TorusMesh:
         #     for arc in self.arcs:
         #         _simplify_arc(arc)
 
-        if logging_on:
+        if log:
             print('\nSimplification completed. {0} pairs eliminated.'.format(pairs_elimination_num))
 
     def simplify_by_percent(self, percentage, method='gradient', log=True):
@@ -849,6 +849,68 @@ class TorusMesh:
         if log:
             print('\nSimplification completed. {0} pairs eliminated.'.format(pairs_elimination_num))
 
+    def simplify_by_pairs_remained(self, pairs_remained, method='gradient', log=True):
+        """
+        Упрощаем до заданного оставшегося количества персистентных пар.
+        :param pairs_remained:
+        :param method:
+        :param log:
+        :return:
+        """
+        possible_methods = ('gradient', 'arc')
+        if method not in possible_methods:
+            raise AssertionError("Аргумент 'method' указан неверно. Допустимые значения: {0}".format(possible_methods))
+        if pairs_remained > len(self.ppairs):
+            raise AssertionError("Текущее количество пар меньше указанного!")
+        if pairs_remained < 2:
+            raise AssertionError("Нужно оставить хотя бы 2 пары.")
+
+        pairs_elimination_num = len(self.ppairs) - pairs_remained
+        checkpoints_num = 20
+        current_checkpoint = 0
+
+        if log:
+            print('Simplification...', end='')
+
+        for i in range(pairs_elimination_num):
+            if log and i > pairs_elimination_num * current_checkpoint / checkpoints_num:
+                current_checkpoint += 1
+                print('.', end='')
+            if method == 'gradient':
+                self.eliminate_pair_revert_gradient()
+            elif method == 'arc':
+                self.eliminate_pair_change_msgraph()
+
+        if log:
+            print('\nSimplification completed. {0} pairs eliminated.'.format(pairs_elimination_num))
+
+    def plot_persistence_diagram(self, betti=None):
+        """
+        Вывести диаграмму персистентности.
+        :param plot:
+        :param betti: диаграмма для заданного индекса.
+            Если 0 - для компонент связности, 1 - для циклов, None - для всего сразу.
+        :return:
+        """
+        # !! ~SIC: Max, поскольку значение в минимуме определяется однозначно,
+        # а в максимуме размазано по 4 клеткам.
+        birth_times = list(map(lambda pair: np.max(self._extvalue(pair[0])), self.ppairs))
+        death_times = list(map(lambda pair: np.max(self._extvalue(pair[1])), self.ppairs))
+        if betti == 0:
+            idx = [_ for _ in range(len(birth_times)) if birth_times[_] > death_times[_]]
+            birth_times, death_times = [death_times[i] for i in idx], [birth_times[i] for i in idx]
+        elif betti == 1:
+            idx = [_ for _ in range(len(birth_times)) if birth_times[_] < death_times[_]]
+            birth_times, death_times = [birth_times[i] for i in idx], [death_times[i] for i in idx]
+        elif betti is None:
+            birth_times, death_times = [min(birth_times[i], death_times[i]) for i in range(len(birth_times))],\
+                                       [max(birth_times[i], death_times[i]) for i in range(len(death_times))]
+        plt.scatter(birth_times, death_times, c='k', s=4)
+        plt.plot([0, max(death_times)], [0, max(death_times)], '--k')
+        plt.xlim(0, max(death_times))
+        plt.ylim(0, max(death_times))
+        return birth_times, death_times
+
     def print(self):
         print(self.values)
 
@@ -862,9 +924,12 @@ class TorusMesh:
              draw_graph=False,
              draw_image=True,
              fname=None,
-             cut=None):
+             cut=None,
+             cmap='gray'):
         """
         Draw mesh values.
+        :param cmap:
+            Color map for image drawing.
         :param annotate_values:
             Annotate values at each point (use only with small fields).
         :param draw_crit_pts:
@@ -898,7 +963,7 @@ class TorusMesh:
         figManager = plt.get_current_fig_manager()
         figManager.window.showMaximized()
         if draw_image:
-            cur_plot = plt.pcolor(self.values, cmap="gray")
+            cur_plot = plt.imshow(self.values, cmap=cmap)
             plt.colorbar(cur_plot)
         if draw_graph:
             edges = []
@@ -972,12 +1037,19 @@ def test2():
     import morse.field_generator
     i = 11
 
-    data = morse.field_generator.gen_field_from_file('D:/Alexeev/data/magnetogram/{0}.bmp'.format(i), filetype='bmp', conditions='torus')
+    data = morse.field_generator.gen_field_from_file('D:/Alexeev/data/magnetogram/test.bmp', filetype='bmp', conditions='torus')
     m = TorusMesh(data.shape[0], data.shape[1])
     m.set_values(data)
     m.cmp_discrete_gradient()
     m.cmp_msgraph()
     m.cmp_arcs()
     m.cmp_persistent_pairs()
-    m.simplify_by_level(70, method='arc')
+    # m.simplify_by_level(70, method='arc')
+    m.simplify_by_pairs_remained(20, method='arc')
     m.draw(fname='D:/{0}_init.png'.format(i)) # cut=(0, 0, 400, 400)
+    print(m.plot_persistence_diagram())
+    plt.show()
+    print(m.plot_persistence_diagram(betti=0))
+    plt.show()
+    print(m.plot_persistence_diagram(betti=1))
+    plt.show()
