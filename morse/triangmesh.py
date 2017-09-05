@@ -190,6 +190,60 @@ class TriangMesh:
         """
         return self._vright(edge[0]), self._vleft(edge[1])
 
+    def cmp_gradient_at_point(self, field_idx, idx):
+        """
+        Вектор градиента в точке по его 8-окрестности.
+        :param field_idx:
+            Индекс поля.
+        :param idx:
+            Индекс вершины.
+        :return:
+        """
+        # Компонента Y вектора градиента
+        # Верхняя и нижняя вершины
+        y = self.value(field_idx, self._vtop(idx)) - self.value(field_idx, self._vbottom(idx)) + 0.5 * (
+            # Диагональные вершины. Делим на 2, т. к. удалённость на sqrt(2) и при проецировании ещё делим на sqrt(2).
+            self.value(field_idx, self._vleft(self._vtop(idx))) + self.value(field_idx, self._vright(self._vtop(idx))) -
+            self.value(field_idx, self._vleft(self._vbottom(idx))) - self.value(field_idx, self._vright(self._vbottom(idx)))
+        )
+
+        x = self.value(field_idx, self._vright(idx)) - self.value(field_idx, self._vleft(idx)) + 0.5 * (
+            # Диагональные вершины. Делим на 2, т. к. удалённость на sqrt(2) и при проецировании ещё делим на sqrt(2).
+            self.value(field_idx, self._vbottom(self._vright(idx))) + self.value(field_idx, self._vtop(self._vright(idx))) -
+            self.value(field_idx, self._vbottom(self._vleft(idx))) - self.value(field_idx, self._vtop(self._vleft(idx)))
+        )
+
+        return x, y
+
+    def cmp_gradient_measure_at_point(self, idx, field_idx1=0, field_idx2=1):
+        """
+        Вычислить градиентную меру в точке idx для двух полей.
+        :param idx:
+            Индекс вершины.
+        :param field_idx1:
+            Индекс первого поля.
+        :param field_idx2:
+            Индекс второго поля.
+        :return:
+        """
+        x1, y1 = self.cmp_gradient_at_point(field_idx1, idx)
+        x2, y2 = self.cmp_gradient_at_point(field_idx2, idx)
+        return float(np.cross((x1, y1), (x2, y2)))
+
+    def cmp_gradient_measure(self, field_idx1=0, field_idx2=1):
+        """
+        Вычислить градиентную меру между двумя полями.
+        :param field_idx1: индекс первого поля.
+        :param field_idx2: индекс второго поля.
+        :return:
+        """
+        m = np.zeros(self.size)
+        for idx in range(self.size):
+            x1, y1 = self.cmp_gradient_at_point(field_idx1, idx)
+            x2, y2 = self.cmp_gradient_at_point(field_idx2, idx)
+            m[idx] = float(np.cross((x1, y1), (x2, y2)))
+        return m
+
     def cmp_jacobi_set(self, field_idx1=0, field_idx2=1, eps=None, log=False):
         """
         Вычисление множества Якоби для сетки на плоскости.
