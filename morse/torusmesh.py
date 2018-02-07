@@ -4,6 +4,7 @@ import numpy as np
 import heapq
 from bitarray import bitarray
 from collections import deque
+import networkx as nx
 
 import morse._unionfind
 import copy
@@ -46,7 +47,7 @@ class TorusMesh:
         self.cr_cells = []  # Список критических клеток
         self.V = [None] * (4 * self.size)  # Дискретный градиент
         self.cr_id = np.zeros(4 * self.size, dtype=bool)  # Индикатор критических клеток
-        self.msgraph = None  # Граф Морса-Смейла
+        self.msgraph = nx.MultiGraph()  # Граф Морса-Смейла
         self.ppairs = []  # Список персистентных пар
         self.arcs = {}  # Дуги комплекса Морса-Смейла
 
@@ -332,7 +333,7 @@ class TorusMesh:
         """
         if self.dim(cidx) != 1:
             raise AssertionError("Функция get_min_neib_msgraph должна вызываться с аргументом-седлом")
-        result = [cell for cell in self.msgraph[cidx] if self.dim(cell) == 0]
+        result = [edge[1] for edge in self.msgraph.edges(nbunch=cidx) if self.dim(edge[1]) == 0]
         if len(result) != 2:
             raise ValueError("Ошибка: у седла должны быть ровно два соседа-минимума!")
         return result
@@ -345,7 +346,7 @@ class TorusMesh:
         """
         if self.dim(cidx) != 1:
             raise AssertionError("Функция get_min_neib_msgraph должна вызываться с аргументом-седлом")
-        result = [cell for cell in self.msgraph[cidx] if self.dim(cell) == 2]
+        result = [edge[1] for edge in self.msgraph.edges(nbunch=cidx) if self.dim(edge[1]) == 2]
         if len(result) != 2:
             raise ValueError("Ошибка: у седла должны быть ровно два соседа-максимума!")
         return result
@@ -489,7 +490,8 @@ class TorusMesh:
         Вытаскиваем информацию о соседстве в MS-комплексе.
         На выходе - список, каждой критической клетке сопоставляется список её соседей в MS-графе.
         """
-        self.msgraph = {cell: [] for cell in self.cr_cells}
+        self.msgraph = nx.MultiGraph()
+        self.msgraph.add_nodes_from(self.cr_cells)
 
         q = deque()
 
@@ -498,8 +500,7 @@ class TorusMesh:
                 g = self._facets(cidx)
                 for face in g:
                     if self.is_critical(face):
-                        self.msgraph[cidx].append(face)
-                        self.msgraph[face].append(cidx)
+                        self.msgraph.add_edge(cidx, face)
                     elif self.V[face] > face:  # То есть есть стрелка, и она выходит (а не входит)
                         q.appendleft(face)
                 while q:
@@ -509,8 +510,7 @@ class TorusMesh:
                         if face == a:
                             continue  # Возвращаться нельзя
                         if self.is_critical(face):
-                            self.msgraph[cidx].append(face)
-                            self.msgraph[face].append(cidx)
+                            self.msgraph.add_edge(cidx, face)
                         elif self.V[face] > face:
                             q.appendleft(face)
 
@@ -687,7 +687,10 @@ class TorusMesh:
             raise AssertionError("Первая клетка пары должна быть седлом!")
         extr = pair[1]
         extr_dim = self.dim(extr)
-        saddles = [x for x in self.msgraph[extr] if x != saddle]  # Сёдла-соседи экстремума (кроме седла из пары)
+
+        # Сёдла-соседи экстремума (кроме седла из пары)
+        saddles = [edge[1] for edge in self.msgraph.edges(nbunch=extr) if edge[1] != saddle]
+
         # Минимумы (максимумы) - соседи седла
         mins_or_maxs = self.get_min_neib_msgraph(saddle) if extr_dim == 0 else self.get_max_neib_msgraph(saddle)
         # Вторая клетка-минимум (максимум)
@@ -703,19 +706,17 @@ class TorusMesh:
         self.unset_critical(saddle)
         self.unset_critical(extr)
         # Удаляем дуги из удалённого седла
-        for x in self.msgraph[saddle]:
-            self.msgraph[x].remove(saddle)
-        self.msgraph[saddle].clear()
+        self.msgraph.remove_node(saddle)
         del self.arcs[saddle]
         # Пересчитываем дуги из сёдел (согласно дискретному градиенту)
         for s in saddles:
-            self.msgraph[s].remove(extr)
-            self.msgraph[extr].remove(s)
-            self.msgraph[s].append(min_or_max)
-            self.msgraph[min_or_max].append(s)
+            self.msgraph.remove_edge(s, extr)
+            self.msgraph.add_edge(s, min_or_max)
             self._cmp_arcs(s)
         if log:
             print("Pair {0} eliminated.".format(pair))
+
+        self.msgraph.remove_node(extr)
 
     def eliminate_pair_change_msgraph(self, log=False):
         """
@@ -743,21 +744,22 @@ class TorusMesh:
             raise AssertionError("Вторая клетка пары должна быть максимумом или минимумом!")
 
         # Изменение графа Морса-Смейла.
-        saddles = [x for x in self.msgraph[extr] if x != saddle]  # Сёдла-соседи максимума (кроме седла из пары)
+        #  Сёдла-соседи максимума (кроме седла из пары)
+        saddles = [edge[1] for edge in self.msgraph.edges(nbunch=extr) if edge[1] != saddle]
+
         # Минимумы (максимумы) - соседи седла
         mins_or_maxs = self.get_min_neib_msgraph(saddle) if extr_dim == 0 else self.get_max_neib_msgraph(saddle)
         # Вторая клетка-минимум (максимум)
         min_or_max = mins_or_maxs[0] if mins_or_maxs[0] != extr else mins_or_maxs[1]
-        for x in self.msgraph[saddle]:
-            self.msgraph[x].remove(saddle)
-        self.msgraph[saddle].clear()
+
+        self.msgraph.remove_node(saddle)
         for s in saddles:
             # Добавляем рёбра из соседей минимума (максимума) в другой минимум (максимум)
-            self.msgraph[s].remove(extr)
-            self.msgraph[extr].append(s)
-            self.msgraph[s].append(min_or_max)
-            self.msgraph[min_or_max].append(s)
-        self.msgraph[extr].clear()
+            self.msgraph.remove_edge(s, extr)
+            self.msgraph.add_edge(s, min_or_max)
+
+        self.msgraph.remove_node(extr)
+
         # Дуга, продолжающая дуги из сёдел-соседей экстремума
         arc_extension = list(reversed(self.find_arc(saddle, extr, check_unique=True)[1: -1]))
         arc_extension.extend(self.find_arc(saddle, min_or_max, check_unique=True))
@@ -1016,6 +1018,7 @@ class TorusMesh:
             plt.savefig(fname)
             plt.close()
 
+
 def test():
     """
     Максимум 27
@@ -1029,15 +1032,21 @@ def test():
     m.cmp_msgraph()
     m.cmp_arcs()
     m.cmp_persistent_pairs()
-    m.simplify_by_level(100, method='gradient')
+    # m.simplify_by_level(100, method='gradient')
     m.draw(draw_gradient=False, draw_arcs=True, draw_graph=False, draw_persistence_pairs=True)
+    plt.show()
 
 
 def test2():
     import morse.field_generator
     i = 11
 
-    data = morse.field_generator.gen_field_from_file('D:/Alexeev/data/magnetogram/test.bmp', filetype='bmp', conditions='torus')
+    # data = morse.field_generator.gen_field_from_file('D:/YandexDisk/fits/data/processed/AR12003/10.fits',
+    #                                                  filetype='fits',
+    #                                                  conditions='torus')
+    data = morse.field_generator.gen_field_from_file('D:/example.bmp',
+                                                     filetype='bmp',
+                                                     conditions='torus')
     m = TorusMesh(data.shape[0], data.shape[1])
     m.set_values(data)
     m.cmp_discrete_gradient()
@@ -1045,11 +1054,14 @@ def test2():
     m.cmp_arcs()
     m.cmp_persistent_pairs()
     # m.simplify_by_level(70, method='arc')
-    m.simplify_by_pairs_remained(20, method='arc')
-    m.draw(fname='D:/{0}_init.png'.format(i)) # cut=(0, 0, 400, 400)
-    print(m.plot_persistence_diagram())
-    plt.show()
-    print(m.plot_persistence_diagram(betti=0))
-    plt.show()
-    print(m.plot_persistence_diagram(betti=1))
-    plt.show()
+    m.simplify_by_pairs_remained(20, method='gradient')
+    # nx.draw(m.msgraph)
+    # plt.show()
+    # print(nx.algebraic_connectivity(m.msgraph, method='lanczos'))
+    # m.draw(fname='D:/{0}_init.png'.format(i))  # cut=(0, 0, 400, 400)
+    # print(m.plot_persistence_diagram())
+    # plt.show()
+    # print(m.plot_persistence_diagram(betti=0))
+    # plt.show()
+    # print(m.plot_persistence_diagram(betti=1))
+    # plt.show()
