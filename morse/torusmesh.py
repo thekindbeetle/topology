@@ -9,6 +9,7 @@ import networkx as nx
 import morse._unionfind
 import copy
 import re
+import warnings
 
 
 def _simplify_arc(arc):
@@ -863,7 +864,8 @@ class TorusMesh:
         if method not in possible_methods:
             raise AssertionError("Аргумент 'method' указан неверно. Допустимые значения: {0}".format(possible_methods))
         if pairs_remained > len(self.ppairs):
-            raise AssertionError("Текущее количество пар меньше указанного!")
+            warnings.warn("Текущее количество пар меньше указанного! Пары не будут сокращены")
+            return
         if pairs_remained < 2:
             raise AssertionError("Нужно оставить хотя бы 2 пары.")
 
