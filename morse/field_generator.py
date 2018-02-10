@@ -139,17 +139,19 @@ def gen_field_from_file(filename, filetype='bmp', conditions='torus', compressio
 
             return field
     elif filetype == 'fits':
-        with fits.open(filename, mode='readonly') as fits_image:
-            image = fits_image[0].data
-            if is_torus_conditions:
-                rotated_image = np.rot90(image, k=2)
-                rotated_image = rotated_image[::compression, ::compression]
-                horizontal_image = image[::-1, ::compression]
-                vertical_image = image[::compression, ::-1]
-                image = np.hstack((np.vstack((image, vertical_image)), np.vstack((horizontal_image, rotated_image))))
-            if perturb_data:
-                perturb(image)
-            return image
+        import sunpy.map
+        # I cannot read compressed image usual way.
+        mp = sunpy.map.Map(filename)
+        image = mp.data
+        if is_torus_conditions:
+            rotated_image = np.rot90(image, k=2)
+            rotated_image = rotated_image[::compression, ::compression]
+            horizontal_image = image[::-1, ::compression]
+            vertical_image = image[::compression, ::-1]
+            image = np.hstack((np.vstack((image, vertical_image)), np.vstack((horizontal_image, rotated_image))))
+        if perturb_data:
+            perturb(image)
+        return image
     elif filetype == 'asc':
         grid = np.loadtxt(filename, skiprows=6)
         if is_torus_conditions:
