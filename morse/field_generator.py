@@ -102,11 +102,11 @@ def gen_field_from_file(filename, filetype='bmp', conditions='torus', compressio
     :param perturb_data: Возмущение изображения (по умолчанию — True).
     :return:
     """
-    ALLOWABLE_FILETYPES = ('bmp', 'fits', 'asc')
+    allowed_file_types = ('bmp', 'fits', 'asc')
 
-    if filetype not in ALLOWABLE_FILETYPES:
+    if filetype not in allowed_file_types:
         raise AssertionError('Данный формат файла не поддерживается\n'
-                             'Допустимые форматы: {0}'.format(ALLOWABLE_FILETYPES))
+                             'Допустимые форматы: {0}'.format(allowed_file_types))
     _check_conditions(conditions)
     is_torus_conditions = (conditions == 'torus')
     if is_torus_conditions and compression <= 0:

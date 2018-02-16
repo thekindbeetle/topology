@@ -395,12 +395,13 @@ class TorusMesh:
         star.sort(key=(lambda x: self._extvalue(x)))
         return star
 
-    def cmp_discrete_gradient(self, logging_on=True):
+    def cmp_discrete_gradient(self, logging_on=True, threads_num=8):
         """
         Реализация процедуры вычисления дискретного градиента по исходным данным.
         Сюда включено вычисление критических клеток.
         ProcessLowerStars
         (Vanessa Robins)
+        :param threads_num: Количество потоков для параллельного вычисления.
         :param logging_on: Текстовый вывод.
         :return:
         """
@@ -408,19 +409,13 @@ class TorusMesh:
         self.V = [None] * (4 * self.size)
         self.cr_id = np.zeros(4 * self.size, dtype=bool)
 
-        # Две вспомогательные кучи
-        pq_zero = []
-        pq_one = []
-        checkpoints_num = 20
-        current_checkpoint = 0
-
         if logging_on:
             print('Computation of discrete gradient field...', end='')
 
-        for idx in range(self.size):
-            if logging_on and idx > self.size * current_checkpoint / checkpoints_num:
-                current_checkpoint += 1
-                print('.', end='')
+        def process_star(idx):
+            # Two additional heaps
+            pq_zero = []
+            pq_one = []
 
             lstar = self.lower_star(idx)
             if not lstar:
@@ -459,6 +454,10 @@ class TorusMesh:
                         for a in lstar:
                             if (gamma[1] in self._facets(a)) and (len(self.unpaired_facets(a, lstar)) == 1):
                                 heapq.heappush(pq_one, (self._extvalue(a), a))
+
+        from multiprocessing.dummy import Pool as ThreadPool
+        pool = ThreadPool(threads_num)
+        pool.map(process_star, range(self.size))
 
         # Сортируем клетки по возрастанию значения — получаем фильтрацию.
         self.cr_cells.sort(key=lambda idx: self._extvalue(idx))
@@ -1062,7 +1061,8 @@ def test2():
     # print(nx.algebraic_connectivity(m.msgraph, method='lanczos'))
     # m.draw(fname='D:/{0}_init.png'.format(i))  # cut=(0, 0, 400, 400)
     # print(m.plot_persistence_diagram())
-    # plt.show()
+    m.draw()
+    plt.show()
     # print(m.plot_persistence_diagram(betti=0))
     # plt.show()
     # print(m.plot_persistence_diagram(betti=1))
