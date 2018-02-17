@@ -1,6 +1,9 @@
 import matplotlib.pyplot as plt
 import numpy as np
 from morse.torusmesh import TorusMesh
+from mpl_toolkits.mplot3d import Axes3D
+from matplotlib import cm
+import warnings
 
 
 class LaplaceSmoother:
@@ -20,10 +23,6 @@ class LaplaceSmoother:
         self.field = np.zeros((lx, ly), dtype=float)
         self.mask = np.zeros((lx, ly), dtype=bool)
 
-    def draw(self):
-        cur_plot = plt.imshow(self.field, cmap='gray', origin='lower')
-        plt.colorbar(cur_plot)
-
     def set_val(self, x, y, value):
         """
         Устанавливаем значение ячейки (x, y).
@@ -35,6 +34,55 @@ class LaplaceSmoother:
         Делаем значение ячейки неизменным при переходе между состояниями.
         """
         self.mask[x, y] = True
+
+    def smooth(self, converge='steps', steps=1000, eps=100.0, max_converge_steps=5000):
+        """
+        Сгладить изображение по комплексу Морса-Смейла.
+        Сглаживание произвоодится применением фильтра Лапласа на клетках комплекса Морса.
+        В качестве критерия остановки используется либо количество шагов (converge='steps'),
+        либо сходимость по сумме значений ('eps'): когда сумма изменяется после шага менее, чем на eps,
+        сглаживание завершается.
+        :type eps: float
+        :type steps: int
+        :type max_converge_steps: int
+        :param converge:
+            Критерий остановки сглаживания.
+            'steps' - фиксировать количество шагов;
+            'eps' - сходимость по сумме значений.
+        :param steps:
+            При converge='steps' устанавливает количество шагов сглаживания.
+        :param eps:
+            При converge='eps' устанавливает критерий сходимости сглаживания.
+        :param max_converge_steps:
+            Максимальное количество шагов, при сглаживании по методу сходимости по сумме.
+
+        :return:
+        """
+        converge_allowed_values = ['steps', 'eps']
+        if converge not in converge_allowed_values:
+            raise AssertionError('Wrong converge value. Allowed values are {0}'.format(converge_allowed_values))
+        if converge == 'steps' and steps < 1:
+            raise AssertionError('Variable steps takes only positive values')
+        if converge == 'eps' and eps <= 0:
+            raise AssertionError('Variable eps takes only positive values')
+
+        if converge == 'steps':
+            for i in range(steps):
+                self.next()
+        elif converge == 'eps':
+            prev_sum = 0
+            curr_sum = np.sum(self.field)  # Просто инициализация нулём
+            i = 0
+            for i in range(max_converge_steps):
+                self.next()
+                prev_sum = curr_sum
+                curr_sum = np.sum(self.field)
+                if np.abs(curr_sum - prev_sum) < eps:
+                    break
+            if i == max_converge_steps - 1:
+                warnings.warn('Maximum converge steps exceeded!')
+            else:
+                print('Converged in {0} steps'.format(i + 1))
 
     def next(self):
         """
@@ -63,9 +111,29 @@ class LaplaceSmoother:
         # Значение фиксированных клеток не изменяется
         self.field = np.where(self.mask, self.field, new_field)
 
-    @staticmethod
-    def create_from_mesh(mesh, lx, ly):
+    def draw(self, plot_3d=False):
         """
+        Plot smoothed image.
+        :param plot_3d: Plot smoothed image as 3D-surface.
+        :return:
+        """
+        if plot_3d:
+            fig = plt.figure()
+            x, y = np.meshgrid(range(self.ly), range(self.lx))
+            ax = fig.gca(projection='3d')
+            ax.plot_surface(x, y, self.field, cmap=cm.gray, linewidth=0, antialiased=True)
+        else:
+            plt.figure()
+            cur_plot = plt.imshow(self.field, cmap='gray', origin='lower')
+            plt.colorbar(cur_plot)
+        plt.show()
+
+    @staticmethod
+    def create_from_mesh(mesh, lx, ly, interpolation='linear'):
+        """
+        :param interpolation:
+            Interpolation method to set values on arcs.
+            'linear', 'log'
         :type mesh: TorusMesh
         """
         arc_list = mesh.list_arcs()
@@ -76,7 +144,22 @@ class LaplaceSmoother:
         for arc in arc_list:
             start_val = mesh._extvalue(arc[0])[0]
             end_val = mesh._extvalue(arc[-1])[0]
-            values = np.linspace(start_val, end_val, len(arc))
+            values = np.array([])
+            if interpolation == 'linear':
+                values = np.linspace(start_val, end_val, len(arc))
+            elif interpolation == 'log':
+                if np.sign(start_val) == np.sign(end_val):
+                    # Если концы дуги одного знака, то интерполируем в лог-масштабе.
+                    values = np.geomspace(start_val, end_val, num=len(arc))
+                else:
+                    # Если в разном, то середину дуги считаем за 0 (с добавкой)
+                    # и интерполируем две части дуги.
+                    eps = 0.1
+                    values = np.geomspace(start_val, eps * np.sign(start_val), num=len(arc) // 2)
+                    if len(arc) % 2 == 1:
+                        values = np.append(values, [0.0])
+                    values = np.append(values,np.geomspace(eps * np.sign(end_val), end_val, num=len(arc) // 2))
+
             arc_values_list.append(values)
 
         # Создаём экземпляр сглаживателя
