@@ -1,5 +1,7 @@
 import matplotlib.pyplot as plt
 import matplotlib.collections as mc
+from matplotlib import cm
+from mpl_toolkits.mplot3d import Axes3D
 import numpy as np
 import heapq
 from bitarray import bitarray
@@ -916,6 +918,12 @@ class TorusMesh:
 
     def print(self):
         print(self.values)
+
+    def draw_3d(self):
+        fig = plt.figure()
+        x, y = np.meshgrid(range(self.sizeY), range(self.sizeX))
+        ax = fig.gca(projection='3d')
+        ax.plot_surface(x, y, self.values, cmap=cm.gray, linewidth=0, antialiased=True)
 
     def draw(self,
              draw_crit_pts=True,

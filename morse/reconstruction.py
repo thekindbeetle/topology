@@ -38,7 +38,7 @@ class LaplaceSmoother:
     def smooth(self, converge='steps', steps=1000, eps=100.0, max_converge_steps=5000):
         """
         Сгладить изображение по комплексу Морса-Смейла.
-        Сглаживание произвоодится применением фильтра Лапласа на клетках комплекса Морса.
+        Сглаживание производится применением фильтра Лапласа на клетках комплекса Морса.
         В качестве критерия остановки используется либо количество шагов (converge='steps'),
         либо сходимость по сумме значений ('eps'): когда сумма изменяется после шага менее, чем на eps,
         сглаживание завершается.
@@ -111,9 +111,10 @@ class LaplaceSmoother:
         # Значение фиксированных клеток не изменяется
         self.field = np.where(self.mask, self.field, new_field)
 
-    def draw(self, plot_3d=False):
+    def draw(self, plot_3d=False, antialiased=True):
         """
         Plot smoothed image.
+        :param antialiased: Anti-alias.
         :param plot_3d: Plot smoothed image as 3D-surface.
         :return:
         """
@@ -121,7 +122,8 @@ class LaplaceSmoother:
             fig = plt.figure()
             x, y = np.meshgrid(range(self.ly), range(self.lx))
             ax = fig.gca(projection='3d')
-            ax.plot_surface(x, y, self.field, cmap=cm.gray, linewidth=0, antialiased=True)
+            ax.plot_surface(x, y, self.field, cmap=cm.gray, linewidth=0, antialiased=antialiased)
+            ax.view_init(azim=-30, elev=15)
         else:
             plt.figure()
             cur_plot = plt.imshow(self.field, cmap='gray', origin='lower')
@@ -140,7 +142,7 @@ class LaplaceSmoother:
         arc_list.sort(key=len)
         arc_values_list = []
 
-        # Линейным интерполированием устанавливаем значения на дугах
+        # Интерполированием устанавливаем значения на дугах
         for arc in arc_list:
             start_val = mesh._extvalue(arc[0])[0]
             end_val = mesh._extvalue(arc[-1])[0]

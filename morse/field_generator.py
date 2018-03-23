@@ -190,7 +190,10 @@ def resize(field, multipliers=(10, 10), sigma=(25, 25), conditions='plain'):
         [np.concatenate([np.full(multipliers, field[i, j], dtype=field.dtype)
                          for i in range(field.shape[0])], axis=0)
          for j in range(field.shape[1])], axis=1)
-    new_field = gaussian_filter(new_field, sigma)
+    if conditions == 'plain':
+      new_field = gaussian_filter(new_field, sigma)
+    elif conditions == 'torus':
+      new_field = gaussian_filter(new_field, sigma, mode='wrap')
     return new_field
 
 

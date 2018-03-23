@@ -3,19 +3,13 @@ import matplotlib.colors as colors
 plt.style.use("ggplot")
 import numpy as np
 import os
-import urllib
 
-import morse.field_generator as gen
-import morse.torusmesh as torusmesh
-
-from datetime import datetime, timedelta
+from datetime import datetime
 from astropy import units as u
 from astropy.coordinates import SkyCoord
-from astropy.io import fits
 
 import sunpy
-from sunpy.net import hek, Fido, attrs as a
-from sunpy.io.special import srs
+from sunpy.net import hek, attrs as a
 from sunpy.coordinates import frames
 from sunpy.database import Database
 
@@ -135,6 +129,3 @@ def download_ar_hmi_data(ar_number, period=3600, database_path='D:/fits', half_i
 
     if plot_evolution:
         plt.show()
-
-
-download_ar_hmi_data(11596, plot_evolution=True, silent=True)
