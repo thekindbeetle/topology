@@ -1027,6 +1027,22 @@ class TorusMesh:
             plt.savefig(fname)
             plt.close()
 
+    @staticmethod
+    def build_all(field, log=False):
+        """
+        Построить комплекс Морса-Смейла одной функцией.
+        :param self:
+        :param field:
+        :return:
+        """
+        mesh = TorusMesh(*field.shape)
+        mesh.set_values(field)
+        mesh.cmp_discrete_gradient(logging_on=log)
+        mesh.cmp_msgraph()
+        mesh.cmp_arcs()
+        mesh.cmp_persistent_pairs(log=log)
+        return mesh
+
 
 def test():
     """
@@ -1075,3 +1091,21 @@ def test2():
     # plt.show()
     # print(m.plot_persistence_diagram(betti=1))
     # plt.show()
+
+
+def test3():
+
+    import morse.field_generator
+    data = morse.field_generator.gen_field_from_file('D:/example.bmp',
+                                                     filetype='bmp',
+                                                     conditions='torus')
+    m = TorusMesh.build_all(data)
+    # m.simplify_by_level(70, method='arc')
+    m.simplify_by_pairs_remained(20, method='gradient')
+    # nx.draw(m.msgraph)
+    # plt.show()
+    # print(nx.algebraic_connectivity(m.msgraph, method='lanczos'))
+    # m.draw(fname='D:/{0}_init.png'.format(i))  # cut=(0, 0, 400, 400)
+    # print(m.plot_persistence_diagram())
+    m.draw()
+    plt.show()
