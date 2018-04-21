@@ -306,6 +306,20 @@ class TorusMesh:
         return x <= self._coords(arc[0])[1] <= lx and y <= self._coords(arc[0])[0] <= ly and \
                x <= self._coords(arc[-1])[1] <= lx and y <= self._coords(arc[-1])[0] <= ly
 
+    def is_arc_crossed_boundary(self, arc):
+        """
+        Проверка, пересекает ли дуга границу склейки.
+        Проверяем, есть ли граничные клетки в дуге.
+        :param arc:
+        :return:
+        """
+        for cell in arc:
+            for idx in self._verts(cell):
+                if (idx < self.sizeX) or (idx % self.sizeY) == 0:
+                    print(cell)
+                    return True
+        return False
+
     def is_unpaired(self, idx):
         """
         Проверяем, является ли клетка спаренной или помеченной как критическая
@@ -494,6 +508,17 @@ class TorusMesh:
         """
         self.msgraph = nx.MultiGraph()
         self.msgraph.add_nodes_from(self.cr_cells)
+
+        morse_index = dict()
+
+        for index in [0, 1, 2]:
+            for p in self.cp(index):
+                morse_index[p] = index
+
+        # Устанавливаем координаты критических точек и индекс Морса в качестве атрибутов.
+        nx.set_node_attributes(self.msgraph, dict(list(map(lambda p: (p, self._coords(p)[0]), self.cr_cells))), "x")
+        nx.set_node_attributes(self.msgraph, dict(list(map(lambda p: (p, self._coords(p)[1]), self.cr_cells))), "y")
+        nx.set_node_attributes(self.msgraph, morse_index, "morse_index")
 
         q = deque()
 
@@ -1000,7 +1025,7 @@ class TorusMesh:
         if draw_arcs:
             edges = []
             for arc in self.list_arcs():
-                if (cut is None) or self.is_arc_inner(arc, *cut): # Отбрасываем граничные дуги
+                if (cut is None) or self.is_arc_inner(arc, *cut):  # Отбрасываем граничные дуги
                     for idx in range(len(arc) - 1):
                         edge = [self._coords(arc[idx]), self._coords(arc[idx + 1])]
                         if np.abs(edge[0][0] - edge[1][0]) < 1 and np.abs(edge[0][1] - edge[1][1]) < 1:
@@ -1027,6 +1052,23 @@ class TorusMesh:
             plt.savefig(fname)
             plt.close()
 
+    def get_cut_morse_graph(self):
+        """
+        Граф Морса с удалёнными рёбрами, проходящими через границу склейки в тор.
+        :return:
+        """
+        g = nx.Graph(self.msgraph)
+
+        # TODO: учесть дублирующиеся дуги.
+        for arc in self.list_arcs():
+            if self.is_arc_crossed_boundary(arc):
+                try:
+                    g.remove_edge(arc[0], arc[-1])
+                except nx.exception.NetworkXError:
+                    print('edge {0}->{1} is already removed'.format(arc[0], arc[-1]))
+        return g
+
+
     @staticmethod
     def build_all(field, log=False):
         """
@@ -1050,15 +1092,15 @@ def test():
     два минимума 2, 7
     три седла 15, 16, 23
     """
-    field = np.asarray([[2, 8, 1], [9, 5, 6], [7, 3, 4]])
-    m = TorusMesh(3, 3)
+    field = np.asarray([[2, 8, 1, 10], [9, 5, 6, 11], [7, 3, 4, 12]])
+    m = TorusMesh(3, 4)
     m.set_values(field)
     m.cmp_discrete_gradient()
     m.cmp_msgraph()
     m.cmp_arcs()
     m.cmp_persistent_pairs()
     # m.simplify_by_level(100, method='gradient')
-    m.draw(draw_gradient=False, draw_arcs=True, draw_graph=False, draw_persistence_pairs=True)
+    m.draw(draw_gradient=False, draw_arcs=True, draw_graph=False, draw_persistence_pairs=True, annotate_values=True)
     plt.show()
 
 
@@ -1096,12 +1138,12 @@ def test2():
 def test3():
 
     import morse.field_generator
-    data = morse.field_generator.gen_field_from_file('D:/example.bmp',
+    data = morse.field_generator.gen_field_from_file('/home/alexeev/data/example.bmp',
                                                      filetype='bmp',
-                                                     conditions='torus')
+                                                     conditions='plain')
     m = TorusMesh.build_all(data)
     # m.simplify_by_level(70, method='arc')
-    m.simplify_by_pairs_remained(20, method='gradient')
+    m.simplify_by_pairs_remained(20, method='arc')
     # nx.draw(m.msgraph)
     # plt.show()
     # print(nx.algebraic_connectivity(m.msgraph, method='lanczos'))
@@ -1109,3 +1151,19 @@ def test3():
     # print(m.plot_persistence_diagram())
     m.draw()
     plt.show()
+
+    positions = dict(list(zip(nx.nodes(m.msgraph), list(zip(nx.get_node_attributes(m.msgraph, "x").values(),
+                                                            nx.get_node_attributes(m.msgraph, "y").values())))))
+    colors = ['b', 'g', 'r']
+    color_map = list(map(lambda v: colors[v], nx.get_node_attributes(m.msgraph, "morse_index").values()))
+
+    nx.draw(m.msgraph, pos=positions, node_color=color_map, node_size=30)
+    plt.show()
+
+    print(m.arcs)
+
+    nx.draw(m.get_cut_morse_graph(), pos=positions, node_color=color_map, node_size=30)
+    plt.show()
+
+
+# test3()
