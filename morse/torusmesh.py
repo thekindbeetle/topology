@@ -316,7 +316,7 @@ class TorusMesh:
         for cell in arc:
             for idx in self._verts(cell):
                 if (idx < self.sizeX) or (idx % self.sizeY) == 0:
-                    print(cell)
+                    # print(cell)
                     return True
         return False
 
@@ -1065,7 +1065,8 @@ class TorusMesh:
                 try:
                     g.remove_edge(arc[0], arc[-1])
                 except nx.exception.NetworkXError:
-                    print('edge {0}->{1} is already removed'.format(arc[0], arc[-1]))
+                    pass
+                    # print('edge {0}->{1} is already removed'.format(arc[0], arc[-1]))
         return g
 
 
