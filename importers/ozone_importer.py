@@ -3,10 +3,15 @@ import numpy as np
 from pandas import date_range
 from mpl_toolkits.basemap import Basemap
 import matplotlib.pyplot as plt
+import matplotlib.colors
 
 
 class OzoneImporter:
     data_dir = ''
+
+    c_map = plt.cm.jet
+    bounds = np.linspace(200, 600, 17)
+    norm = matplotlib.colors.BoundaryNorm(bounds, c_map.N)
 
     longitude_large = np.linspace(-180, 180, 1441, endpoint=True)
     latitude_large = np.linspace(-90, 90, 721, endpoint=True)
@@ -81,9 +86,12 @@ class OzoneImporter:
 
         return fields
 
-    def draw_map(self, field, large=True, vmin=200, vmax=600, cmap='jet', projection='ortho'):
+    def draw_map(self, field, large=True, vmin=200, vmax=600, cmap=None,
+                 lon_0=0, lat_0=70, projection='ortho'):
         """
         Нарисовать поле озона в заданной проекции.
+        :param lon_0:
+        :param lat_0:
         :param field:
         :param large:
         :param vmin:
@@ -92,22 +100,32 @@ class OzoneImporter:
         :param projection:
         :return:
         """
+        norm = None
+        if cmap is None:
+            cmap = self.c_map
+            norm = self.norm
+
         if large:
             longitude, latitude = self.longitude_large, self.latitude_large
         else:
             longitude, latitude = self.longitude_small, self.latitude_small
 
-        if projection == 'ortho':
-            m = Basemap(projection=projection, lon_0=0, lat_0=70)
+        if projection == 'gnom':
+            m = Basemap(width=15.e6, height=15.e6, projection='gnom', lat_0=90, lon_0=0, resolution='l')
+        elif projection == 'ortho':
+            m = Basemap(projection='ortho', lon_0=lon_0, lat_0=lat_0, resolution='l')
         elif projection == 'mercator':
             m = Basemap(projection='merc', llcrnrlat=-80, urcrnrlat=80,
-                        llcrnrlon=-180, urcrnrlon=180, lat_ts=20, resolution='c')
+                        llcrnrlon=-180, urcrnrlon=180, lat_ts=20, resolution='l')
         else:
             raise Exception('Projection {0} is not supported'.format(projection))
 
+        m.drawparallels(np.arange(10, 90, 20))
+        m.drawmeridians(np.arange(-180, 180, 30))
+        m.drawcoastlines(antialiased=True)
+
         xx, yy = np.meshgrid(longitude, latitude)
-        m.pcolormesh(xx, yy, field, latlon=True, cmap=cmap, vmin=vmin, vmax=vmax)
-        m.drawcoastlines()
+        m.pcolormesh(xx, yy, field, latlon=True, cmap=cmap, vmin=vmin, vmax=vmax, norm=norm)
         m.colorbar()
         return plt.gcf()
 

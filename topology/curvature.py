@@ -67,7 +67,7 @@ def get_curvature_map(field):
         for j in range(2, curvature_map.shape[1] - 2):
             curvature_map[i, j] = get_curvature_at_point(f, i, j)
     # Теперь обрезаем лишнее.
-    return curvature_map[2:-2]
+    return curvature_map[2:-2, 2:-2]
 
 
 def get_mean_curvature(field):
