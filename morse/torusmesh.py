@@ -411,21 +411,21 @@ class TorusMesh:
         star.sort(key=(lambda x: self._extvalue(x)))
         return star
 
-    def cmp_discrete_gradient(self, logging_on=True, threads_num=8):
+    def cmp_discrete_gradient(self, log=True, threads_num=8):
         """
         Реализация процедуры вычисления дискретного градиента по исходным данным.
         Сюда включено вычисление критических клеток.
         ProcessLowerStars
         (Vanessa Robins)
         :param threads_num: Количество потоков для параллельного вычисления.
-        :param logging_on: Текстовый вывод.
+        :param log: Текстовый вывод.
         :return:
         """
         self.cr_cells = []
         self.V = [None] * (4 * self.size)
         self.cr_id = np.zeros(4 * self.size, dtype=bool)
 
-        if logging_on:
+        if log:
             print('Computation of discrete gradient field...', end='')
 
         def process_star(idx):
@@ -478,7 +478,7 @@ class TorusMesh:
         # Сортируем клетки по возрастанию значения — получаем фильтрацию.
         self.cr_cells.sort(key=lambda idx: self._extvalue(idx))
 
-        if logging_on:
+        if log:
             print(" Completed.")
 
     def cmp_crit_cells(self):
@@ -1069,18 +1069,17 @@ class TorusMesh:
                     # print('edge {0}->{1} is already removed'.format(arc[0], arc[-1]))
         return g
 
-
-    @staticmethod
-    def build_all(field, log=False):
+    @classmethod
+    def build_all(cls, field, log=False):
         """
         Построить комплекс Морса-Смейла одной функцией.
-        :param self:
+        :param log:
         :param field:
         :return:
         """
         mesh = TorusMesh(*field.shape)
         mesh.set_values(field)
-        mesh.cmp_discrete_gradient(logging_on=log)
+        mesh.cmp_discrete_gradient(log=log)
         mesh.cmp_msgraph()
         mesh.cmp_arcs()
         mesh.cmp_persistent_pairs(log=log)

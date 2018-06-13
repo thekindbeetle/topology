@@ -16,10 +16,8 @@ def poisson_homogeneous_point_process(rate, dx, dy=None, log=False, fixed_rate=F
         dy = dx
     point_num = int(rate * dx * dy) if fixed_rate else poisson(rate * dx * dy).rvs()
     points = uniform.rvs(0, dx, (point_num, 2))
-    x = np.transpose(points)[0]
-    y = np.transpose(points)[1]
 
     if log:
         print("{0} Poisson distributed points generated".format(point_num))
 
-    return x, y
+    return points
