@@ -336,7 +336,20 @@ class TriangMesh:
         if fname:
             plt.savefig(fname)
             plt.close()
-#
+
+    @staticmethod
+    def build_all(field1, field2, conditions='plain'):
+        """
+        Создание поля и построение множества Якоби (одновременно).
+        :param field:
+        :return:
+        """
+        tr_mesh = TriangMesh(*field1.shape, conditions=conditions)
+        tr_mesh.set_field(field1)
+        tr_mesh.set_field(field2)
+        tr_mesh.cmp_jacobi_set()
+        return tr_mesh
+
 # field = np.zeros((3, 4))
 # t = TriangMesh(3, 4, conditions='cylinder_y')
 # t.set_field(field)
