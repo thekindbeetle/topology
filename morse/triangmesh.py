@@ -215,7 +215,7 @@ class TriangMesh:
 
         return x, y
 
-    def cmp_gradient_measure_at_point(self, idx, field_idx1=0, field_idx2=1):
+    def cmp_cross_gradient_measure_at_point(self, idx, field_idx1=0, field_idx2=1):
         """
         Вычислить градиентную меру в точке idx для двух полей.
         :param idx:
@@ -230,7 +230,22 @@ class TriangMesh:
         x2, y2 = self.cmp_gradient_at_point(field_idx2, idx)
         return float(np.cross((x1, y1), (x2, y2)))
 
-    def cmp_gradient_measure(self, field_idx1=0, field_idx2=1):
+    def cmp_dot_gradient_measure_at_point(self, idx, field_idx1=0, field_idx2=1):
+        """
+        Вычислить скалярную градиентную меру между полями.
+        :param idx:
+            Индекс вершины.
+        :param field_idx1:
+            Индекс первого поля.
+        :param field_idx2:
+            Индекс второго поля.
+        :return:
+        """
+        x1, y1 = self.cmp_gradient_at_point(field_idx1, idx)
+        x2, y2 = self.cmp_gradient_at_point(field_idx2, idx)
+        return float(np.dot((x1, y1), (x2, y2)))
+
+    def cmp_cross_gradient_measure(self, field_idx1=0, field_idx2=1):
         """
         Вычислить градиентную меру между двумя полями.
         :param field_idx1: индекс первого поля.
@@ -242,7 +257,21 @@ class TriangMesh:
             x1, y1 = self.cmp_gradient_at_point(field_idx1, idx)
             x2, y2 = self.cmp_gradient_at_point(field_idx2, idx)
             m[idx] = float(np.cross((x1, y1), (x2, y2)))
-        return m
+        return m.reshape(self.fields[0].shape)
+
+    def cmp_dot_gradient_measure(self, field_idx1=0, field_idx2=1):
+        """
+        Вычислить градиентную меру между двумя полями.
+        :param field_idx1: индекс первого поля.
+        :param field_idx2: индекс второго поля.
+        :return:
+        """
+        m = np.zeros(self.size)
+        for idx in range(self.size):
+            x1, y1 = self.cmp_gradient_at_point(field_idx1, idx)
+            x2, y2 = self.cmp_gradient_at_point(field_idx2, idx)
+            m[idx] = float(np.dot((x1, y1), (x2, y2)))
+        return m.reshape(self.fields[0].shape)
 
     def cmp_jacobi_set(self, field_idx1=0, field_idx2=1, eps=None, log=False):
         """

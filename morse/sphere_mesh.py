@@ -39,7 +39,7 @@ class SphereMesh:
         self.values = np.zeros((self.sizeX, self.sizeY))    # Значения сетки
         self.cr_cells = []  # Список критических клеток
         self.V = [None] * (4 * lx * ly + 2 * lx + 2 * ly - 6)   # Дискретный градиент
-        self.cr_id = np.zeros(4 * lx * ly + 2 * lx + 2 * ly - 6, dtype=bool)    # Индикатор критических клеток
+        self.cr_id = np.zeros(4 * lx * ly + 2 * lx + 2 * ly - 6, dtype=bool)   # Индикатор критических клеток
         self.msgraph = None     # Граф Морса-Смейла
         self.ppairs = []        # Список персистентных пар
         self.arcs = {}  # Дуги комплекса Морса-Смейла
