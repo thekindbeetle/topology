@@ -40,6 +40,7 @@ def binary_jacobi_set(field1, field2, threshold=0.7):
 def precise_binary_jacobi_set(field1, field2, conditions='plain'):
     """
     Точное вычисление множества Якоби по дискретной модели.
+    Метод достаточно медленный и сжирает память.
     :param conditions: Граничные условия.
     :param field1: Первое поле.
     :param field2: Второе поле.
@@ -98,3 +99,22 @@ def simplify_jacobi_set(jacobi_field, src_field, persistence_level):
 
     return result
 
+
+def get_persistence_map(jacobi_field, src_field):
+    """
+    Карта персистентности множества Якоби.
+    Точкам контура присваивается значение персистентности контура.
+    :param jacobi_field: бинарное изображение множества Якоби.
+    :param src_field: исходное поле (одно из исходных полей, по нему вычисляется персистентность контуров).
+    :return: Поле Якоби в виде изображения со значением персистетности на контурах. Вне контуров значение 0.
+    """
+    result = np.zeros(jacobi_field.shape)
+    components_map = skimage.measure.label(jacobi_field, neighbors=8)  # Выделяем связные компоненты.
+    comp_nums = range(1, components_map.max())  # Количество связных компонент.
+    for comp_num in comp_nums:
+        indexes = np.argwhere(components_map == comp_num)
+        values = [src_field[idx[0], idx[1]] for idx in indexes]
+        pers = max(values) - min(values)
+        for idx in indexes:
+            result[idx[0], idx[1]] = pers
+    return result

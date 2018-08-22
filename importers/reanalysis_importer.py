@@ -17,21 +17,24 @@ class ReanalysisImporter:
         """
         self.dset = netCDF4.Dataset(os.path.join(data_folder, 'air.mon.mean.nc'), "r", format="NETCDF4")
         self.dtimes = netCDF4.num2date(self.dset.variables['time'][:], self.dset.variables['time'].units)
+        self.levels = self.dset.variables['level'][:].data
         self.data_folder = data_folder
 
-    def get_mean_month_temperature_data(self, year, month):
+    def get_mean_month_temperature_data(self, year, month, level=1000):
         """
         Поле средней температуры за месяц.
         :param year: год
         :param month: месяц
+        :param level: уровень (мБар) - по умолчанию, у поверхности (1000 мБар)
         :return:
         """
         time_idx = np.argwhere(self.dtimes==datetime(year, month, 1))[0][0]
-        return np.roll(cv2.resize(self.dset.variables['air'][time_idx][::-1, :], dsize=(1440, 720)), 720, axis=1)
+        level_idx = np.argwhere(self.levels==level)[0][0]
+        return np.roll(cv2.resize(self.dset.variables['air'][time_idx, level_idx, ::-1, :], dsize=(1440, 720)), 720, axis=1)
 
-    def get_temperature_day_data(self, year, month, day):
+    def get_temperature_day_data_surface(self, year, month, day):
         """
-        Данные по температуре за конкретный день.
+        Данные по температуре за конкретный день (у поверхности, уровень 1000 мБар).
         :param month: месяц
         :param day: год
         :return:

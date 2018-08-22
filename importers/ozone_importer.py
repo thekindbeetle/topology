@@ -120,8 +120,8 @@ class OzoneImporter:
         else:
             raise Exception('Projection {0} is not supported'.format(projection))
 
-        m.drawparallels(np.arange(10, 90, 20))
-        m.drawmeridians(np.arange(-180, 180, 30))
+        m.drawparallels(np.arange(-70., 80., 10), labels=[1, 0, 0, 0])
+        m.drawmeridians(np.arange(-150., 180., 30), labels=[0, 0, 0, 1])
         m.drawcoastlines(antialiased=True)
 
         xx, yy = np.meshgrid(longitude, latitude)

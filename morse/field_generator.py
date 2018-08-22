@@ -67,7 +67,7 @@ def gen_gaussian_sum_torus(rows_num, cols_num, centers, sigma, log=True):
 
         for i in range(-sigma3, sigma3 + 1):
             for j in range(-sigma3, sigma3 + 1):
-                field[(int(center[0]) + i) % rows_num, (int(center[1]) + j) % rows_num] += gaussian[i, j]
+                field[(int(center[0]) + i) % rows_num, (int(center[1]) + j) % cols_num] += gaussian[i, j]
 
     print('\nGeneration completed.')
     return field

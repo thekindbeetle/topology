@@ -1,5 +1,7 @@
 import numpy as np
 import topology.curvature
+from shapely.geometry import LineString, Point
+import matplotlib.pyplot as plt
 
 
 class SphericalGeometry:
@@ -15,9 +17,9 @@ class SphericalGeometry:
         """
         self.lons = lons
         self.lats = lats
+        self.lonslist = np.linspace(-180, 180, lons + 1, endpoint=True)
+        self.latslist = np.linspace(-90, 90, lats + 1, endpoint=True)
         self.r = radius
-
-        np.linspace(-89.875, 89.875, 720, endpoint=True)
 
         # Градусная сетка на сфере lats x lots
         xx, yy = np.meshgrid([2 * np.pi / lons] * lons,
@@ -27,7 +29,7 @@ class SphericalGeometry:
         dxx.fill(2 * np.pi / lons)
         dyy.fill(np.pi / lats)
 
-        # Считаем распределение по площадив зависимостиот координат квадранта на сфере
+        # Считаем распределение по площади в зависимости от координат квадранта на сфере
         self.area_grid = self.unit_area_eps(xx, yy, dxx, dyy)
 
     def sphere_unit_area(self, phi_1, phi_2, th_1, th_2):
@@ -63,6 +65,18 @@ class SphericalGeometry:
         """
         return np.linalg.multi_dot([binary_image.flatten(), self.area_grid.flatten()])
 
+    def convert_index(self, lat0, lat1, lon0, lon1):
+        """
+        Переводим пару долгот и пару широт в индексы массивов.
+        !!TODO: Сделать переход через линию перемены дат.
+        :return:
+        """
+        idx_lat0 = int((1 + lat0 / 90) * 0.5 * self.lats)
+        idx_lat1 = int((1 + lat1 / 90) * 0.5 * self.lats)
+        idx_lon0 = int((1 + lon0 / 180) * 0.5 * self.lons)
+        idx_lon1 = int((1 + lon1 / 180) * 0.5 * self.lons)
+        return idx_lat0, idx_lat1, idx_lon0, idx_lon1
+
     def curve_perimeter_quad(self, binary_image, lat0, lat1, lon0, lon1):
         """
         Периметр кривых на бинарном изображении, спроецированном на сферу
@@ -74,41 +88,72 @@ class SphericalGeometry:
         :param lon1:
         :return:
         """
-        idx_lat0 = int((1 + lat0 / 90) * 0.5 * self.lats)
-        idx_lat1 = int((1 + lat1 / 90) * 0.5 * self.lats)
-        idx_lon0 = int((1 + lon0 / 180) * 0.5 * self.lons)
-        idx_lon1 = int((1 + lon1 / 180) * 0.5 * self.lons)
+        idx_lat0, idx_lat1, idx_lon0, idx_lon1 = self.convert_index(lat0, lat1, lon0, lon1)
         return np.linalg.multi_dot([binary_image[idx_lat0:idx_lat1, idx_lon0:idx_lon1].flatten(),
                                     self.area_grid[idx_lat0:idx_lat1, idx_lon0:idx_lon1].flatten()])
 
-    def mean_curvature(self, binary_image):
+    def integrate_field(self, field):
         """
-        Средняя кривизна линий на сфере.
-        :param binary_image: Бинарное изображение
+        Интеграл по изображению, спроецированному на сферу
+        :param field: Изображение
         :return:
         """
-        curvature_map = topology.curvature.get_curvature_map(binary_image)
-        return np.linalg.multi_dot([curvature_map.flatten(), self.area_grid.flatten()]) /\
-               self.curve_perimeter(binary_image)
+        return np.linalg.multi_dot([field.flatten(), self.area_grid.flatten()])
 
-    def mean_curvature_quad(self, binary_image, lat0, lat1, lon0, lon1):
+    def integrate_field_quad(self, field, lat0, lat1, lon0, lon1):
         """
-        Средняя кривизна линий на бинарном изображении, спроецированном на сферу
+        Интеграл по изображению, спроецированному на сферу
         в заданном квадранте сферы
-        :param binary_image: Бинарное изображение
-        :param lat0:
-        :param lat1:
-        :param lon0:
-        :param lon1:
+        :param field: Изображение
         :return:
         """
-        idx_lat0 = int((1 + lat0 / 90) * 0.5 * self.lats)
-        idx_lat1 = int((1 + lat1 / 90) * 0.5 * self.lats)
-        idx_lon0 = int((1 + lon0 / 180) * 0.5 * self.lons)
-        idx_lon1 = int((1 + lon1 / 180) * 0.5 * self.lons)
-        curvature_map = topology.curvature.get_curvature_map(binary_image[idx_lat0:idx_lat1, idx_lon0:idx_lon1])
-        return np.linalg.multi_dot([curvature_map.flatten(), self.area_grid[idx_lat0:idx_lat1, idx_lon0:idx_lon1].flatten()]) /\
-               self.curve_perimeter_quad(binary_image, lat0, lat1, lon0, lon1)
+        idx_lat0, idx_lat1, idx_lon0, idx_lon1 = self.convert_index(lat0, lat1, lon0, lon1)
+        return np.linalg.multi_dot([field[idx_lat0:idx_lat1, idx_lon0:idx_lon1].flatten(),
+                                    self.area_grid[idx_lat0:idx_lat1, idx_lon0:idx_lon1].flatten()])
+
+    @staticmethod
+    def sphere_arc_distance(lon1, lat1, lon2, lat2):
+        """
+        Угловая величина дуги, соединяющей две точки на сфере.
+        """
+        # See "Haversine formula"
+        lon1, lat1, lon2, lat2 = np.deg2rad(lon1), np.deg2rad(lat1), np.deg2rad(lon2), np.deg2rad(lat2)
+        a = np.sin((lat2 - lat1) / 2.0) ** 2
+        b = np.sin((lon2 - lon1) / 2.0) ** 2
+        c = np.sqrt(a + np.cos(lat2) * np.cos(lat1) * b)
+        return 2 * np.arcsin(c)
+
+    def sphere_distance(self, lon1, lat1, lon2, lat2):
+        """
+        Длина дуги, соединяющей две точки на сфере.
+        """
+        return self.sphere_arc_distance(lon1, lat1, lon2, lat2) * self.r
+
+    def sphere_contour_distance(self, contour):
+        """
+        Длина контура на сфере.
+        :param contour: последовательность точек (lon, lat).
+        :return: длина контура
+        """
+        return np.sum([self.sphere_distance(contour[i][0], contour[i][1], contour[i + 1][0], contour[i + 1][1])
+                       for i in range(len(contour) - 1)])
+
+    def sphere_angle(self, lon1, lat1, lon2, lat2, lon3, lat3):
+        """
+        Угол ABC,
+        где точки A(x1, y1), B(x2, y2), C(x3, y3)
+        заданы в сферических координатах.
+        """
+        a = self.sphere_arc_distance(lon1, lat1, lon2, lat2)
+        b = self.sphere_arc_distance(lon2, lat2, lon3, lat3)
+        c = self.sphere_arc_distance(lon3, lat3, lon1, lat1)
+        angle = np.arccos((np.cos(c) - np.cos(a) * np.cos(b)) / (np.sin(a) * np.sin(b)))
+        return angle
+
+    def _convert_to_spherical(self, contour):
+        sph_x = [self.lonslist[int(p[0])] for p in contour]
+        sph_y = [self.latslist[int(p[1])] for p in contour]
+        return np.transpose([sph_x, sph_y])
 
 
 def _test():
@@ -123,4 +168,16 @@ def _test():
 
 def _test2():
     s = SphericalGeometry(1, 1440, 720)
-    s.curve_perimeter_quad(None, 30, 90, -180, 180)
+    im = np.ones((720, 1440)) * 10
+    # im[:, :720] = 0
+    print(s.integrate_field_quad(im, 0, 90, -180, 180))
+    print(s.integrate_field(im))
+
+
+def _test3():
+    lat1, lon1 = 55.5807418, 36.8237457  # Москва
+    lat2, lon2 = 57.6521473, 39.583654   # Ярославль
+    lat3, lon3 = 57.7696034, 40.8032077  # Кострома
+    s = SphericalGeometry(6400, 1440, 720)
+    print(s.sphere_distance(lon1, lat1, lon2, lat2))
+    print(s.sphere_contour_distance([(lon1, lat1), (lon2, lat2), (lon3, lat3)]))
