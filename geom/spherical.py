@@ -1,7 +1,4 @@
 import numpy as np
-import topology.curvature
-from shapely.geometry import LineString, Point
-import matplotlib.pyplot as plt
 
 
 class SphericalGeometry:

@@ -19,7 +19,7 @@ class OzoneImporter:
     longitude_small = np.linspace(-180, 180, 361, endpoint=True)
     latitude_small = np.linspace(-90, 90, 181, endpoint=True)
 
-    def __init__(self, datadir='/home/alexeev/data_alexeev/ozone/toms.gsfc.nasa.gov'):
+    def __init__(self, datadir='D:/data/ozone/toms.gsfc.nasa.gov/'):
         self.data_dir = datadir
 
     @staticmethod
