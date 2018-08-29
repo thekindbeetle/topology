@@ -96,10 +96,11 @@ def _extend_nans(data):
     return result, last_half_index
 
 
-def smooth_data(data):
+def smooth_data(data, cut=False):
     """
     Сглаживаем данные на сфере.
     Параметры сглаживания заданы в начале скрипта.
+    :param cut: обрезать дополнительные данные.
     :param data:
     :return:
     """
@@ -110,7 +111,8 @@ def smooth_data(data):
     result = _variable_blur(result, kernel_size_x=int_kernel_size_x, kernel_size_y=int_kernel_size_y)
 
     # Отрезаем обратно
-    result[last_half_nan + 1:, :] = np.nan
+    if cut:
+        result[last_half_nan + 1:, :] = np.nan
     return result
 
 

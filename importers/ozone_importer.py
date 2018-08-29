@@ -86,8 +86,7 @@ class OzoneImporter:
 
         return fields
 
-    def draw_map(self, field, large=True, vmin=200, vmax=600, cmap=None,
-                 lon_0=0, lat_0=70, projection='ortho'):
+    def draw_map(self, field, large=True, vmin=200, vmax=600, cmap=None, lon_0=0, lat_0=70, projection='ortho'):
         """
         Нарисовать поле озона в заданной проекции.
         :param lon_0:
