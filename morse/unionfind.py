@@ -1,7 +1,7 @@
 import numpy as np
 
 
-class _UnionFind:
+class UnionFind:
     """
     Union-Find data structure.
     """
@@ -18,8 +18,8 @@ class _UnionFind:
 
     def __init__(self, size):
         self._size = size
-        self._parent = [0] * size
-        self._rank = [0] * size
+        self._parent = [-1] * size
+        self._rank = [-1] * size
 
     def makeset(self, x):
         """

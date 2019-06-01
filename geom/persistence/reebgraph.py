@@ -1,13 +1,16 @@
 import numpy as np
 import networkx as nx
 from collections import deque
+from morse.unionfind import UnionFind as UF
 
 
 class ReebGraph:
     data = None  # Исходные данные
     index = None  # Ячейки в порядке возрастания значений
+    order = None  # Номера ячеек на сетке
     cell_num = 0
     shape = []
+    colors = []
 
     critical_points = []
     critical_points_idx = []
@@ -23,8 +26,9 @@ class ReebGraph:
         self.data = data
         self.shape = data.shape
         self.cell_num = data.size
+        self.order = np.zeros(data.shape)
 
-    def _neighbors(self, i, j):
+    def _neighbours(self, i, j):
         if i == 0:
             if j == 0:
                 return [(0, 1), (1, 0)]
@@ -52,139 +56,153 @@ class ReebGraph:
         Sort cells by its values.
         :return: List of pairs [x, y] of array cells sorted by values.
         """
-        x, y = np.meshgrid(range(self.shape[0]), range(self.shape[1]))
+        y, x = np.meshgrid(range(self.shape[1]), range(self.shape[0]))
         flatten_data = self.data.flatten()
-        self.index = np.dstack((x.flatten()[np.argsort(flatten_data)],
-                                y.flatten()[np.argsort(flatten_data)]))[0]
+        self.index = np.dstack((x.flatten()[flatten_data.argsort()],
+                                y.flatten()[flatten_data.argsort()]))[0]
+        self.order = np.zeros(self.cell_num, dtype=np.int)
+        self.order[flatten_data.argsort()] = np.arange(0, self.cell_num, dtype=np.int)
+        self.order = self.order.reshape(self.shape)
 
-    def cmp_merge_and_split_graphs(self):
+    def cmp_merge_and_split_trees(self):
+        """
+        See Carr, H., Snoeyink, J., & Axen, U. (2003).
+        Computing contour trees in all dimensions.
+        Computational Geometry, 24(2), 75–94.
+        """
         # Compute merge tree
-        label = -np.ones(self.shape, dtype=np.int)
-        for idx in range(self.cell_num):
-            neighbour_labels = [label[i[0], i[1]] for i in self._neighbors(*self.index[idx])]
-            neighbour_labels = np.unique(neighbour_labels)
-            neighbour_labels = neighbour_labels[neighbour_labels >= 0]
-            if len(neighbour_labels) == 0:
-                # If cell has no labelled neighbors, component created
-                self.critical_points.append(idx)
-                self.critical_points_idx.append(0)  # Помечаем минимумом
-                label[self.index[idx][0], self.index[idx][1]] = idx
-            elif len(neighbour_labels) == 1:
-                label[self.index[idx][0], self.index[idx][1]] = neighbour_labels[0]
-            elif len(neighbour_labels) == 2:
-                self.critical_points.append(idx)
-                self.critical_points_idx.append(1)  # Помечаем седлом
-                self.merge_tree.append((neighbour_labels[0], idx))
-                self.merge_tree.append((neighbour_labels[1], idx))
-                label[label == neighbour_labels[0]] = idx
-                label[label == neighbour_labels[1]] = idx
-                label[self.index[idx][0], self.index[idx][1]] = idx
-            else:
-                self.critical_points.append(idx)
-                self.critical_points_idx.append(1)  # Помечаем седлом
-                for neighbour_label in neighbour_labels:
-                    self.merge_tree.append((neighbour_label, idx))
-                    label[label == neighbour_label] = idx
-                label[self.index[idx][0], self.index[idx][1]] = idx
+        uf = UF(self.cell_num)
+        highest_vertex = dict()
+        for i in range(self.cell_num):
+            uf.makeset(i)
+            highest_vertex[i] = i
+            for neighbour in self._neighbours(*self.index[i]):
+                j = self.order[neighbour[0], neighbour[1]]
+                if (j > i) or (uf.find(j) == uf.find(i)):
+                    pass
+                else:
+                    self.merge_tree.append([highest_vertex[uf.find(j)], i])
+                    uf.union(i, j)
+                    highest_vertex[uf.find(j)] = i
 
         # Compute split tree
-        label = -np.ones(self.shape, dtype=np.int)
-        for idx in reversed(range(self.cell_num)):
-            neighbour_labels = [label[i[0], i[1]] for i in self._neighbors(*self.index[idx])]
-            neighbour_labels = np.unique(neighbour_labels)
-            neighbour_labels = neighbour_labels[neighbour_labels >= 0]
-            if len(neighbour_labels) == 0:
-                # If cell has no labelled neighbors, component created
-                self.critical_points.append(idx)
-                self.critical_points_idx.append(2)  # Помечаем максимумом
-                label[self.index[idx][0], self.index[idx][1]] = idx
-            elif len(neighbour_labels) == 1:
-                label[self.index[idx][0], self.index[idx][1]] = neighbour_labels[0]
-            elif len(neighbour_labels) == 2:
-                self.critical_points.append(idx)
-                self.critical_points_idx.append(1)  # Помечаем седлом
-                self.split_tree.append((idx, neighbour_labels[0]))
-                self.split_tree.append((idx, neighbour_labels[1]))
-                label[label == neighbour_labels[0]] = idx
-                label[label == neighbour_labels[1]] = idx
-                label[self.index[idx][0], self.index[idx][1]] = idx
-            else:
-                self.critical_points.append(idx)
-                self.critical_points_idx.append(1)  # Помечаем седлом
-                for neighbour_label in neighbour_labels:
-                    self.merge_tree.append((idx, neighbour_label))
-                    label[label == neighbour_label] = idx
-                label[self.index[idx][0], self.index[idx][1]] = idx
-                print("Дохрена меток!")
-        # TODO: Если только один максимум или один минимум, то теряем рёбра.
+        uf = UF(self.cell_num)
+        lowest_vertex = dict()
+        for i in reversed(range(self.cell_num)):
+            uf.makeset(i)
+            lowest_vertex[i] = i
+            for neighbour in self._neighbours(*self.index[i]):
+                j = self.order[neighbour[0], neighbour[1]]
+                if (j < i) or (uf.find(j) == uf.find(i)):
+                    pass
+                else:
+                    self.split_tree.append([i, lowest_vertex[uf.find(j)]])
+                    uf.union(i, j)
+                    lowest_vertex[uf.find(j)] = i
 
     def convert_to_nx_graphs(self):
         self.split_graph = nx.DiGraph()
         self.merge_graph = nx.DiGraph()
-        self.split_graph.add_nodes_from(self.critical_points)
-        self.merge_graph.add_nodes_from(self.critical_points)
+        self.split_graph.add_nodes_from(np.arange(0, self.cell_num, dtype=np.int))
+        self.merge_graph.add_nodes_from(np.arange(0, self.cell_num, dtype=np.int))
         self.split_graph.add_edges_from(self.split_tree)
         self.merge_graph.add_edges_from(self.merge_tree)
+
+    def set_colors(self):
+        self.colors = [(0, 0, 0) for i in range(self.cell_num)]
+        for i in range(self.cell_num):
+            if (self.reeb_graph.in_degree(i) == 0) and (self.reeb_graph.out_degree(i) != 0):
+                self.colors[i] = (0, 0, 1)
+            if (self.reeb_graph.in_degree(i) != 0) and (self.reeb_graph.out_degree(i) == 0):
+                self.colors[i] = (1, 0, 0)
+
+    @staticmethod
+    def _reduce_node(graph, node):
+        """
+        Remove node from graph.
+        Connect neighbour vertices.
+        """
+        if graph.in_degree(node) == 1 and graph.out_degree(node) == 1:
+            prev_neighbour = list(graph.predecessors(node))[0]
+            next_neighbour = list(graph.successors(node))[0]
+            graph.add_edge(prev_neighbour, next_neighbour)
+        graph.remove_node(node)
 
     def cmp_reeb_graph(self):
         """
         See Carr, H., Snoeyink, J., & Axen, U. (2003).
         Computing contour trees in all dimensions.
         Computational Geometry, 24(2), 75–94.
-
-        Здесь ситуация проще, циклов нет.
-        Просто склеиваем два графа (split and merge).
         """
+        # 1. For each vertex xi, if up-degree in join tree + down-degree in split tree is 1, enqueue x_i.
+        leaf_queue = deque(reversed([x for x in range(self.cell_num) if
+                                     self.merge_graph.in_degree(x) + self.split_graph.out_degree(x) == 1]))
+
+        # 2. Initialize contour tree to an empty graph on ||join tree|| vertices.
         self.reeb_graph = nx.DiGraph()
-        self.reeb_graph.add_nodes_from(self.critical_points)
-        self.reeb_graph.add_edges_from(self.split_tree)
-        self.reeb_graph.add_edges_from(self.merge_tree)
+        self.reeb_graph.add_nodes_from(range(self.cell_num))
 
-        # Запишем индексы критических точек в вершины графа
-        nx.set_node_attributes(self.reeb_graph,
-                               dict(zip(self.critical_points, self.critical_points_idx)),
-                               "morse_index")
+        # 3. While leaf queue size > 1
+        while leaf_queue:
+            # Dequeue the first vertex, xi, on the leaf queue.
+            x = leaf_queue.pop()
 
-        # Запишем значения персистентности в рёбра графа
-        persistence = dict([(edge, self.data[self.index[edge[1]]] - self.data[self.index[edge[0]]])
-                            for edge in self.reeb_graph.edges])
-        print([edge for edge in self.reeb_graph.edges])
-        nx.set_edge_attributes(self.reeb_graph, persistence, "persistence")
+            # If xi is an upper leaf
+            if self.merge_graph.in_degree[x] == 0:
+                if self.split_graph.out_degree[x] == 0:
+                    break  # Вершина без рёбер
+
+                # find incident arc y_i y_j in join tree.
+                neighbour = list(self.merge_graph.successors(x))[0]
+                self.reeb_graph.add_edge(x, neighbour)
+            else:
+                # else find incident arc z_iz_j in split tree.
+                neighbour = list(self.split_graph.predecessors(x))[0]
+                self.reeb_graph.add_edge(neighbour, x)
+
+            # Remove node from split and merge graphs
+            # See Definition 4.5 from H. Carr (2003)
+            self._reduce_node(self.merge_graph, x)
+            self._reduce_node(self.split_graph, x)
+
+            # If x_j is now a leaf, enqueue x_j
+            if self.merge_graph.in_degree(neighbour) + self.split_graph.out_degree(neighbour) == 1:
+                leaf_queue.append(neighbour)
 
 
 def test():
     import morse.field_generator
     import matplotlib.pyplot as plt
-    data = np.array([
-        [1.0, 2.0, 1.5],
-        [2.5, 5.0, 1.6],
-        [1.2, 2.2, 1.7],
-        [2.5, 5.0, 1.6],
-        [1.0, 2.0, 1.5]
-    ])
-    # data = morse.field_generator.\
-    #     gen_gaussian_sum_rectangle(50, 50, [(10, 10), (15, 15), (10, 15), (20, 5)], 3)
+    # data = np.array([
+    #     [1.0, 2.0, 1.5],
+    #     [2.5, 5.0, 1.6],
+    #     [1.2, 2.2, 1.7],
+    #     [2.5, 5.0, 1.6],
+    #     [1.0, 2.0, 1.5]
+    # ])
+    data = morse.field_generator.\
+        gen_gaussian_sum_rectangle(50, 50, [(10, 10), (15, 15), (10, 15), (20, 5)], 3)
 
     # data = morse.field_generator.gen_sincos_field(200, 200, 0.3, 0.2)
     # data = morse.field_generator.gen_field_from_file("C:/data/1.bmp", conditions='plain')
-    # data = morse.field_generator.perturb(data)
-    #
+    data = morse.field_generator.perturb(data)
+
     reeb = ReebGraph(data)
     reeb.make_index()
-    reeb.cmp_merge_and_split_graphs()
+    reeb.cmp_merge_and_split_trees()
     reeb.convert_to_nx_graphs()
     reeb.cmp_reeb_graph()
 
-    labels_dict = dict([(idx, idx) for idx in reeb.critical_points])
-    positions = dict([(reeb.critical_points[i], reeb.index[reeb.critical_points[i]])
-                      for i in range(len(reeb.critical_points))])
+    # labels_dict = dict([(idx, idx) for idx in reeb.critical_points])
+    # positions = dict([(reeb.critical_points[i], reeb.index[reeb.critical_points[i]])
+    #                   for i in range(len(reeb.critical_points))])
 
-    plt.matshow(np.transpose(data))
-    # nx.draw(reeb.reeb_graph, pos=positions, labels=labels_dict)
-    nx.draw(reeb.merge_graph, pos=positions, labels=labels_dict)
-    nx.draw_networkx_edge_labels(reeb.reeb_graph,
-                                 pos=positions,
-                                 edge_labels=nx.get_edge_attributes(reeb.reeb_graph, 'persistence'))
+    # plt.matshow(np.transpose(data))
+    # # nx.draw(reeb.reeb_graph, pos=positions, labels=labels_dict)
+    # nx.draw(reeb.merge_graph, pos=positions, labels=labels_dict)
+    # nx.draw_networkx_edge_labels(reeb.reeb_graph,
+    #                              pos=positions,
+    #                              edge_labels=nx.get_edge_attributes(reeb.reeb_graph, 'persistence'))
 
     # x = [reeb.index[reeb.cpoints[i]][0] for i in range(len(reeb.cpoints)) if reeb.cpoints_idx[i] == 0]
     # y = [reeb.index[reeb.cpoints[i]][1] for i in range(len(reeb.cpoints)) if reeb.cpoints_idx[i] == 0]
