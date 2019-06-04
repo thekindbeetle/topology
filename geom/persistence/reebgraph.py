@@ -1,4 +1,5 @@
 import numpy as np
+import matplotlib.pyplot as plt
 import networkx as nx
 from collections import deque
 from morse.unionfind import UnionFind as UF
@@ -10,23 +11,131 @@ class ReebGraph:
     order = None  # Номера ячеек на сетке
     cell_num = 0
     shape = []
+    critical_index = []
     colors = []
-
-    critical_points = []
-    critical_points_idx = []
 
     merge_tree = []
     split_tree = []
 
     split_graph = nx.DiGraph()
     merge_graph = nx.DiGraph()
-    reeb_graph = nx.DiGraph()
+    reeb_graph_augmented = nx.DiGraph()
+    reeb_graph_contracted = nx.DiGraph()
 
     def __init__(self, data):
         self.data = data
         self.shape = data.shape
         self.cell_num = data.size
         self.order = np.zeros(data.shape)
+
+    @staticmethod
+    def _reduce_node(graph, node):
+        """
+        Remove node from graph.
+        Works only with 1-1 degree and 0-1 degree vertices.
+        Connect neighbour vertices.
+        Remove flag shows if we need to delete not 1-1 node.
+        """
+        if graph.in_degree(node) == 1 and graph.out_degree(node) == 1:
+            prev_neighbour = list(graph.predecessors(node))[0]
+            next_neighbour = list(graph.successors(node))[0]
+            graph.add_edge(prev_neighbour, next_neighbour)
+        graph.remove_node(node)
+
+    def reduce_node_and_set_persistence(self, node):
+        """
+        Reduce node from graph if it is possible.
+        Set persistence to the new edge
+        :param node:
+        :return:
+        """
+        graph = self.reeb_graph_contracted
+        if graph.in_degree(node) == 1 and graph.out_degree(node) == 1:
+            prev_neighbour = list(graph.predecessors(node))[0]
+            next_neighbour = list(graph.successors(node))[0]
+            graph.add_edge(prev_neighbour, next_neighbour,
+                           persistence=self._cmp_persistence_for_edge(prev_neighbour, next_neighbour))
+            graph.remove_node(node)
+
+    # def _reduce_edge(self, e):
+    #     """
+    #     Contract edge in graph.
+    #     We allow only saddle-extrema edge contraction.
+    #     We check that after removing of extremum there are one downward and one upward (at least) direction.
+    #     """
+    #     graph = self.reeb_graph_contracted
+    #     if graph.node[e[0]]['morse_index'] == 0:
+    #         print('Minimum ', e[0])
+    #         print('Saddle ', e[1])
+    #         print(list(graph.predecessors(e[1])))
+    #         print(list(graph.successors(e[1])))
+    #
+    #         if len(list(graph.predecessors(e[1]))) == 1:
+    #             # We cannot remove this edge
+    #             print('This edge cannot be removed')
+    #             return False
+    #
+    #         graph.remove_node(e[0])
+    #         print('Remove', e[0])
+    #         # self.reduce_node_and_set_persistence(e[1])
+    #         # print('Reduce', e[1])
+    #         return True
+    #     elif graph.node[e[1]]['morse_index'] == 2:
+    #         print('Maximum ', e[1])
+    #         print('Saddle ', e[0])
+    #         print(list(graph.predecessors(e[1])))
+    #         print(list(graph.successors(e[1])))
+    #
+    #         if len(list(graph.successors(e[0]))) == 1:
+    #             # We cannot remove this edge
+    #             print('This edge cannot be removed')
+    #             return False
+    #
+    #         graph.remove_node(e[1])
+    #         print('Remove', e[1])
+    #         # self.reduce_node_and_set_persistence(e[0])
+    #         # print('Reduce', e[0])
+    #         return True
+    #     else:
+    #         return False
+
+    def _reduce_edge(self, e):
+        """
+        Contract edge in graph.
+        We allow only saddle-extrema edge contraction.
+        We check that after removing of extremum there are one downward and one upward (at least) direction.
+        """
+        graph = self.reeb_graph_contracted
+        if graph.node[e[0]]['morse_index'] == 0:
+            print('Minimum ', e[0])
+            print('Saddle ', e[1])
+
+            if graph.out_degree(e[0]) == 1 and graph.in_degree(e[1]) >= 2:
+                graph.remove_node(e[0])
+                print('Remove', e[0])
+                return True
+            else:
+                return False
+            # self.reduce_node_and_set_persistence(e[1])
+            # print('Reduce', e[1])
+        elif graph.node[e[1]]['morse_index'] == 2:
+            print('Maximum ', e[1])
+            print('Saddle ', e[0])
+
+            if graph.in_degree(e[1]) == 1 and graph.out_degree(e[0]) >= 2:
+                graph.remove_node(e[1])
+                print('Remove', e[1])
+                return True
+            else:
+                return False
+            # self.reduce_node_and_set_persistence(e[0])
+            # print('Reduce', e[0])
+        else:
+            return False
+
+    def _cmp_persistence_for_edge(self, v0, v1):
+        return self.data[self.index[v1][0], self.index[v1][1]] - \
+               self.data[self.index[v0][0], self.index[v0][1]]
 
     def _neighbours(self, i, j):
         if i == 0:
@@ -108,27 +217,25 @@ class ReebGraph:
         self.split_graph.add_edges_from(self.split_tree)
         self.merge_graph.add_edges_from(self.merge_tree)
 
-    def set_colors(self):
+    def set_critical_index_and_colors(self):
+        self.critical_index = [-1 for i in range(self.cell_num)]
         self.colors = [(0, 0, 0) for i in range(self.cell_num)]
         for i in range(self.cell_num):
-            if (self.reeb_graph.in_degree(i) == 0) and (self.reeb_graph.out_degree(i) != 0):
+            if (self.reeb_graph_augmented.in_degree(i) == 0): # and (self.reeb_graph_augmented.out_degree(i) == 1):
+                self.critical_index[i] = 0
                 self.colors[i] = (0, 0, 1)
-            if (self.reeb_graph.in_degree(i) != 0) and (self.reeb_graph.out_degree(i) == 0):
+            elif (self.reeb_graph_augmented.out_degree(i) == 0): # and (self.reeb_graph_augmented.out_degree(i) == 0):
+                self.critical_index[i] = 2
                 self.colors[i] = (1, 0, 0)
+            else: # (self.reeb_graph_augmented.in_degree(i) > 1) or (self.reeb_graph_augmented.out_degree(i) > 1):
+                self.critical_index[i] = 1
+                self.colors[i] = (0, 1, 0)
+        colors_dict = dict([(v, self.colors[v]) for v in range(self.cell_num)])
+        critical_index_dict = dict([(v, self.critical_index[v]) for v in range(self.cell_num)])
+        nx.set_node_attributes(self.reeb_graph_augmented, colors_dict, 'color')
+        nx.set_node_attributes(self.reeb_graph_augmented, critical_index_dict, 'morse_index')
 
-    @staticmethod
-    def _reduce_node(graph, node):
-        """
-        Remove node from graph.
-        Connect neighbour vertices.
-        """
-        if graph.in_degree(node) == 1 and graph.out_degree(node) == 1:
-            prev_neighbour = list(graph.predecessors(node))[0]
-            next_neighbour = list(graph.successors(node))[0]
-            graph.add_edge(prev_neighbour, next_neighbour)
-        graph.remove_node(node)
-
-    def cmp_reeb_graph(self):
+    def cmp_augmented_reeb_graph(self):
         """
         See Carr, H., Snoeyink, J., & Axen, U. (2003).
         Computing contour trees in all dimensions.
@@ -139,8 +246,8 @@ class ReebGraph:
                                      self.merge_graph.in_degree(x) + self.split_graph.out_degree(x) == 1]))
 
         # 2. Initialize contour tree to an empty graph on ||join tree|| vertices.
-        self.reeb_graph = nx.DiGraph()
-        self.reeb_graph.add_nodes_from(range(self.cell_num))
+        self.reeb_graph_augmented = nx.DiGraph()
+        self.reeb_graph_augmented.add_nodes_from(range(self.cell_num))
 
         # 3. While leaf queue size > 1
         while leaf_queue:
@@ -154,11 +261,11 @@ class ReebGraph:
 
                 # find incident arc y_i y_j in join tree.
                 neighbour = list(self.merge_graph.successors(x))[0]
-                self.reeb_graph.add_edge(x, neighbour)
+                self.reeb_graph_augmented.add_edge(x, neighbour)
             else:
                 # else find incident arc z_iz_j in split tree.
                 neighbour = list(self.split_graph.predecessors(x))[0]
-                self.reeb_graph.add_edge(neighbour, x)
+                self.reeb_graph_augmented.add_edge(neighbour, x)
 
             # Remove node from split and merge graphs
             # See Definition 4.5 from H. Carr (2003)
@@ -169,10 +276,33 @@ class ReebGraph:
             if self.merge_graph.in_degree(neighbour) + self.split_graph.out_degree(neighbour) == 1:
                 leaf_queue.append(neighbour)
 
+    def contract_edges(self):
+        """
+        Contract edges of the augmented Reeb graph.
+        Retain only critical points.
+        """
+        self.reeb_graph_contracted = self.reeb_graph_augmented.copy(as_view=False)
+        nodes_to_remove = [node for node in self.reeb_graph_contracted.nodes
+                           if self.reeb_graph_contracted.in_degree(node) == 1 and
+                              self.reeb_graph_contracted.out_degree(node) == 1]
+        for node in nodes_to_remove:
+            self._reduce_node(self.reeb_graph_contracted, node)
+
+    def set_persistence(self):
+        persistence = dict([(e, self._cmp_persistence_for_edge(e[0], e[1])) for e in self.reeb_graph_contracted.edges])
+        nx.set_edge_attributes(self.reeb_graph_contracted, persistence, 'persistence')
+
+    def draw(self):
+        plt.matshow(np.transpose(self.data), cmap='gray')
+        colors = list(nx.get_node_attributes(self.reeb_graph_contracted, 'color').values())
+        positions = dict([(idx, self.index[idx]) for idx in range(self.cell_num)])
+        nx.draw_networkx(self.reeb_graph_contracted, pos=positions, with_labels=False, node_size=50, node_color=colors)
+        plt.colorbar()
+
 
 def test():
-    import morse.field_generator
     import matplotlib.pyplot as plt
+    import morse.field_generator
     # data = np.array([
     #     [1.0, 2.0, 1.5],
     #     [2.5, 5.0, 1.6],
@@ -180,68 +310,46 @@ def test():
     #     [2.5, 5.0, 1.6],
     #     [1.0, 2.0, 1.5]
     # ])
-    data = morse.field_generator.\
-        gen_gaussian_sum_rectangle(50, 50, [(10, 10), (15, 15), (10, 15), (20, 5)], 3)
+    # data = morse.field_generator.\
+    #     gen_gaussian_sum_rectangle(50, 50, [(10, 10), (15, 15), (10, 15), (20, 5)], 3)
 
     # data = morse.field_generator.gen_sincos_field(200, 200, 0.3, 0.2)
-    # data = morse.field_generator.gen_field_from_file("C:/data/1.bmp", conditions='plain')
-    data = morse.field_generator.perturb(data)
+    # data = morse.field_generator.gen_field_from_file("C:/data/test.bmp", conditions='plain')
+    data = morse.field_generator.gen_field_from_file(
+        "C:/data/hmi/processed/AR12673/hmi_m_45s_2017_09_06_07_24_45_tai_magnetogram.fits",
+        filetype='fits',
+        conditions='plain')
+
+    import skimage.filters
+    data = skimage.filters.gaussian(data, sigma=10)
 
     reeb = ReebGraph(data)
     reeb.make_index()
     reeb.cmp_merge_and_split_trees()
     reeb.convert_to_nx_graphs()
-    reeb.cmp_reeb_graph()
+    reeb.cmp_augmented_reeb_graph()
+    reeb.set_critical_index_and_colors()
+    reeb.contract_edges()
+    reeb.set_persistence()
 
-    # labels_dict = dict([(idx, idx) for idx in reeb.critical_points])
-    # positions = dict([(reeb.critical_points[i], reeb.index[reeb.critical_points[i]])
-    #                   for i in range(len(reeb.critical_points))])
+    # reeb.draw()
+    print(nx.is_tree(reeb.reeb_graph_augmented))
+    print(nx.is_tree(reeb.reeb_graph_contracted))
 
-    # plt.matshow(np.transpose(data))
-    # # nx.draw(reeb.reeb_graph, pos=positions, labels=labels_dict)
-    # nx.draw(reeb.merge_graph, pos=positions, labels=labels_dict)
-    # nx.draw_networkx_edge_labels(reeb.reeb_graph,
-    #                              pos=positions,
-    #                              edge_labels=nx.get_edge_attributes(reeb.reeb_graph, 'persistence'))
+    persistence = nx.get_edge_attributes(reeb.reeb_graph_contracted, 'persistence')
+    morse_index = nx.get_node_attributes(reeb.reeb_graph_contracted, 'morse_index')
 
-    # x = [reeb.index[reeb.cpoints[i]][0] for i in range(len(reeb.cpoints)) if reeb.cpoints_idx[i] == 0]
-    # y = [reeb.index[reeb.cpoints[i]][1] for i in range(len(reeb.cpoints)) if reeb.cpoints_idx[i] == 0]
-    # plt.scatter(x, y, c='b')
-    # x = [reeb.index[reeb.cpoints[i]][0] for i in range(len(reeb.cpoints)) if reeb.cpoints_idx[i] == 1]
-    # y = [reeb.index[reeb.cpoints[i]][1] for i in range(len(reeb.cpoints)) if reeb.cpoints_idx[i] == 1]
-    # plt.scatter(x, y, c='g')
-    # x = [reeb.index[reeb.cpoints[i]][0] for i in range(len(reeb.cpoints)) if reeb.cpoints_idx[i] == 2]
-    # y = [reeb.index[reeb.cpoints[i]][1] for i in range(len(reeb.cpoints)) if reeb.cpoints_idx[i] == 2]
-    # plt.scatter(x, y, c='r')
+    saddle_ext_arcs = [e for e in reeb.reeb_graph_contracted.edges if
+                       ((morse_index[e[0]] == 0) or (morse_index[e[1]] == 2)) and persistence[e] < 20]
 
-    # for edge in reeb.merge_tree:
-    #     plt.arrow(reeb.index[edge[0]][0], reeb.index[edge[0]][1],
-    #               reeb.index[edge[1]][0] - reeb.index[edge[0]][0],
-    #               reeb.index[edge[1]][1] - reeb.index[edge[0]][1], fc="k", ec="k",
-    #               head_width=1, head_length=1.5, capstyle='round')
-    #
-    # for edge in reeb.split_tree:
-    #     plt.arrow(reeb.index[edge[0]][0], reeb.index[edge[0]][1],
-    #               reeb.index[edge[1]][0] - reeb.index[edge[0]][0],
-    #               reeb.index[edge[1]][1] - reeb.index[edge[0]][1], fc="r", ec="r",
-    #               head_width=1, head_length=1.5, capstyle='round')
+    for e in saddle_ext_arcs:
+        try:
+            reeb._reduce_edge(e)
+        except:
+            print('Fail')
 
+    reeb.contract_edges()
 
-
-    # print(reeb.merge_tree)
-    # print(reeb.split_tree)
-    # print(reeb.cpoints)
-
-    # plt.matshow(data)
-    #
-    # x = [reeb.index[reeb.cpoints[i]][0] for i in range(len(reeb.cpoints)) if reeb.cpoints_idx[i] == 0]
-    # y = [reeb.index[reeb.cpoints[i]][1] for i in range(len(reeb.cpoints)) if reeb.cpoints_idx[i] == 0]
-    # plt.scatter(x, y, c='b')
-    # x = [reeb.index[reeb.cpoints[i]][0] for i in range(len(reeb.cpoints)) if reeb.cpoints_idx[i] == 1]
-    # y = [reeb.index[reeb.cpoints[i]][1] for i in range(len(reeb.cpoints)) if reeb.cpoints_idx[i] == 1]
-    # plt.scatter(x, y, c='g')
-    # x = [reeb.index[reeb.cpoints[i]][0] for i in range(len(reeb.cpoints)) if reeb.cpoints_idx[i] == 2]
-    # y = [reeb.index[reeb.cpoints[i]][1] for i in range(len(reeb.cpoints)) if reeb.cpoints_idx[i] == 2]
-    # plt.scatter(x, y, c='r')
+    reeb.draw()
 
 test()
