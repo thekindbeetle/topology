@@ -6,27 +6,25 @@ from morse.unionfind import UnionFind as UF
 
 
 class ReebGraph:
-    data = None  # Исходные данные
-    index = None  # Ячейки в порядке возрастания значений
-    order = None  # Номера ячеек на сетке
-    cell_num = 0
-    shape = []
-    critical_index = []
-    colors = []
-
-    merge_tree = []
-    split_tree = []
-
-    split_graph = nx.DiGraph()
-    merge_graph = nx.DiGraph()
-    reeb_graph_augmented = nx.DiGraph()
-    reeb_graph_contracted = nx.DiGraph()
 
     def __init__(self, data):
-        self.data = data
+        self.data = data  # Исходные данные
         self.shape = data.shape
+        self.index = None  # Ячейки в порядке возрастания значений
         self.cell_num = data.size
-        self.order = np.zeros(data.shape)
+        self.order = np.zeros(data.shape)  # Номера ячеек на сетке
+
+        self.critical_index = []
+        self.colors = []
+
+        self.merge_tree = []
+        self.split_tree = []
+
+        self.split_graph = nx.DiGraph()
+        self.merge_graph = nx.DiGraph()
+        self.reeb_graph_augmented = nx.DiGraph()
+        self.reeb_graph_contracted = nx.DiGraph()
+
 
     @staticmethod
     def _reduce_node(graph, node):
@@ -56,48 +54,6 @@ class ReebGraph:
             graph.add_edge(prev_neighbour, next_neighbour,
                            persistence=self._cmp_persistence_for_edge(prev_neighbour, next_neighbour))
             graph.remove_node(node)
-
-    # def _reduce_edge(self, e):
-    #     """
-    #     Contract edge in graph.
-    #     We allow only saddle-extrema edge contraction.
-    #     We check that after removing of extremum there are one downward and one upward (at least) direction.
-    #     """
-    #     graph = self.reeb_graph_contracted
-    #     if graph.node[e[0]]['morse_index'] == 0:
-    #         print('Minimum ', e[0])
-    #         print('Saddle ', e[1])
-    #         print(list(graph.predecessors(e[1])))
-    #         print(list(graph.successors(e[1])))
-    #
-    #         if len(list(graph.predecessors(e[1]))) == 1:
-    #             # We cannot remove this edge
-    #             print('This edge cannot be removed')
-    #             return False
-    #
-    #         graph.remove_node(e[0])
-    #         print('Remove', e[0])
-    #         # self.reduce_node_and_set_persistence(e[1])
-    #         # print('Reduce', e[1])
-    #         return True
-    #     elif graph.node[e[1]]['morse_index'] == 2:
-    #         print('Maximum ', e[1])
-    #         print('Saddle ', e[0])
-    #         print(list(graph.predecessors(e[1])))
-    #         print(list(graph.successors(e[1])))
-    #
-    #         if len(list(graph.successors(e[0]))) == 1:
-    #             # We cannot remove this edge
-    #             print('This edge cannot be removed')
-    #             return False
-    #
-    #         graph.remove_node(e[1])
-    #         print('Remove', e[1])
-    #         # self.reduce_node_and_set_persistence(e[0])
-    #         # print('Reduce', e[0])
-    #         return True
-    #     else:
-    #         return False
 
     def _reduce_edge(self, e):
         """
@@ -299,22 +255,57 @@ class ReebGraph:
         nx.draw_networkx(self.reeb_graph_contracted, pos=positions, with_labels=False, node_size=50, node_color=colors)
         plt.colorbar()
 
-    def draw_3d(self):
+    def draw_3d(self, draw_edges=False, use_threshold=True, threshold=20, xmin=0, ymin=0, xmax=None, ymax=None,
+                zmin=-3000, zmax=3000, title='', fname=None):
+        """
+        :param draw_edges: Рисовать рёбра
+        :param use_threshold: Не показывать маленькие экстремумы.
+        :param threshold: Пороговое значение для отрисовки экстремумов (по модулю).
+        :return:
+        """
         import mpl_toolkits.mplot3d as plot3d
-        fig = plt.figure()
+
+        if xmax is None:
+            xmax = self.data.shape[1]
+        if ymax is None:
+            ymax = self.data.shape[0]
+
+        fig = plt.figure(figsize=(12, 12))
         ax = fig.add_subplot(111, projection='3d')
         x, y = np.meshgrid(range(self.data.shape[0]), range(self.data.shape[1]))
         ax.plot_wireframe(x, y, np.transpose(self.data), colors='gray', linewidths=0.5)
-        ax.set_xlim((0, 400))
-        ax.set_ylim((0, 400))
-        ax.set_zlim((-3000, 3000))
+        ax.set_xlim((xmin, xmax))
+        ax.set_ylim((ymin, ymax))
+        ax.set_zlim((zmin, zmax))
+        ax.set_title(title)
 
-        colors = list(nx.get_node_attributes(self.reeb_graph_contracted, 'color').values())
-        positions_x = [self.index[idx][0] for idx in self.reeb_graph_contracted.nodes()]
-        positions_y = [self.index[idx][1] for idx in self.reeb_graph_contracted.nodes()]
-        positions_z = [self.data[self.index[idx][0], self.index[idx][1]] for idx in self.reeb_graph_contracted.nodes()]
+        if draw_edges:
+            edges = []
+            for e in self.reeb_graph_contracted.edges():
+                ax.plot([self.index[e[0]][0], self.index[e[1]][0]], [self.index[e[0]][1], self.index[e[1]][1]],
+                        [self.data[self.index[e[0]][0], self.index[e[0]][1]],
+                         self.data[self.index[e[1]][0], self.index[e[1]][1]]], '-k')
 
-        ax.scatter(positions_x, positions_y, positions_z, c=colors, s=100)
+        if use_threshold:
+            nodes = [v for v in self.reeb_graph_contracted.nodes() if
+                     np.abs(self.data[self.index[v][0], self.index[v][1]]) > threshold]
+
+            colors_dict = nx.get_node_attributes(self.reeb_graph_contracted, 'color')
+            colors = [colors_dict[v] for v in nodes]
+            positions_x = [self.index[idx][0] for idx in nodes]
+            positions_y = [self.index[idx][1] for idx in nodes]
+            positions_z = [self.data[self.index[idx][0], self.index[idx][1]] for idx in nodes]
+            ax.scatter(positions_x, positions_y, positions_z, c=colors, s=100)
+        else:
+            colors = list(nx.get_node_attributes(self.reeb_graph_contracted, 'color').values())
+            positions_x = [self.index[idx][0] for idx in self.reeb_graph_contracted.nodes()]
+            positions_y = [self.index[idx][1] for idx in self.reeb_graph_contracted.nodes()]
+            positions_z = [self.data[self.index[idx][0], self.index[idx][1]] for idx in self.reeb_graph_contracted.nodes()]
+
+            ax.scatter(positions_x, positions_y, positions_z, c=colors, s=100)
+        if fname is not None:
+            fig.savefig(fname)
+            plt.close()
 
     @staticmethod
     def build_all(data):
@@ -335,7 +326,6 @@ class ReebGraph:
 
 
 def test():
-    import matplotlib.pyplot as plt
     import morse.field_generator
     # data = np.array([
     #     [1.0, 2.0, 1.5],
@@ -354,41 +344,46 @@ def test():
     #     filetype='fits',
     #     conditions='plain')
     #
-    data = morse.field_generator.gen_field_from_file(
-        "C:/data/hmi/processed/AR12673/hmi_m_45s_2017_09_06_02_01_30_tai_magnetogram.fits",
-        filetype='fits',
-        conditions='plain')
-
+    import os
     import skimage.filters
-    data = skimage.filters.gaussian(data, sigma=10)
 
-    reeb = ReebGraph(data)
-    reeb.make_index()
-    reeb.cmp_merge_and_split_trees()
-    reeb.convert_to_nx_graphs()
-    reeb.cmp_augmented_reeb_graph()
-    reeb.set_critical_index_and_colors()
-    reeb.contract_edges()
-    reeb.set_persistence()
+    datadir = "C:/data/hmi/processed/AR12673/"
+    files = os.listdir(datadir)
+    for file in files:
+        data = morse.field_generator.gen_field_from_file(
+            os.path.join(datadir, file),
+            filetype='fits',
+            conditions='plain')
 
-    # reeb.draw()
-    print(nx.is_tree(reeb.reeb_graph_augmented))
-    print(nx.is_tree(reeb.reeb_graph_contracted))
+        data = skimage.filters.gaussian(data, sigma=10)
+        data = data[100:300, 100:300]
 
-    persistence = nx.get_edge_attributes(reeb.reeb_graph_contracted, 'persistence')
-    morse_index = nx.get_node_attributes(reeb.reeb_graph_contracted, 'morse_index')
+        reeb = ReebGraph(data)
+        reeb.make_index()
+        reeb.cmp_merge_and_split_trees()
+        reeb.convert_to_nx_graphs()
+        reeb.cmp_augmented_reeb_graph()
+        reeb.set_critical_index_and_colors()
+        reeb.contract_edges()
+        reeb.set_persistence()
 
-    saddle_ext_arcs = [e for e in reeb.reeb_graph_contracted.edges if
-                       ((morse_index[e[0]] == 0) or (morse_index[e[1]] == 2)) and persistence[e] < 20]
+        # reeb.draw()
+        print(nx.is_tree(reeb.reeb_graph_augmented))
+        print(nx.is_tree(reeb.reeb_graph_contracted))
 
-    for e in saddle_ext_arcs:
-        try:
-            reeb._reduce_edge(e)
-        except:
-            print('Fail')
+        persistence = nx.get_edge_attributes(reeb.reeb_graph_contracted, 'persistence')
+        morse_index = nx.get_node_attributes(reeb.reeb_graph_contracted, 'morse_index')
 
-    reeb.contract_edges()
+        saddle_ext_arcs = [e for e in reeb.reeb_graph_contracted.edges if
+                           ((morse_index[e[0]] == 0) or (morse_index[e[1]] == 2)) and persistence[e] < 20]
 
-    reeb.draw_3d()
+        for e in saddle_ext_arcs:
+            try:
+                reeb._reduce_edge(e)
+            except:
+                print('Fail')
+
+        reeb.contract_edges()
+        reeb.draw_3d(draw_edges=False, zmin=-2000, zmax=2000, title=file, fname='{0}.png'.format(file[:-5]))
 
 test()
