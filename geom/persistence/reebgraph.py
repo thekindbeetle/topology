@@ -299,6 +299,40 @@ class ReebGraph:
         nx.draw_networkx(self.reeb_graph_contracted, pos=positions, with_labels=False, node_size=50, node_color=colors)
         plt.colorbar()
 
+    def draw_3d(self):
+        import mpl_toolkits.mplot3d as plot3d
+        fig = plt.figure()
+        ax = fig.add_subplot(111, projection='3d')
+        x, y = np.meshgrid(range(self.data.shape[0]), range(self.data.shape[1]))
+        ax.plot_wireframe(x, y, np.transpose(self.data), colors='gray', linewidths=0.5)
+        ax.set_xlim((0, 400))
+        ax.set_ylim((0, 400))
+        ax.set_zlim((-3000, 3000))
+
+        colors = list(nx.get_node_attributes(self.reeb_graph_contracted, 'color').values())
+        positions_x = [self.index[idx][0] for idx in self.reeb_graph_contracted.nodes()]
+        positions_y = [self.index[idx][1] for idx in self.reeb_graph_contracted.nodes()]
+        positions_z = [self.data[self.index[idx][0], self.index[idx][1]] for idx in self.reeb_graph_contracted.nodes()]
+
+        ax.scatter(positions_x, positions_y, positions_z, c=colors, s=100)
+
+    @staticmethod
+    def build_all(data):
+        """
+        Static constructor of the Reeb graph by 2D-data.
+        :param data:
+        :return:
+        """
+        reeb = ReebGraph(data)
+        reeb.make_index()
+        reeb.cmp_merge_and_split_trees()
+        reeb.convert_to_nx_graphs()
+        reeb.cmp_augmented_reeb_graph()
+        reeb.set_critical_index_and_colors()
+        reeb.contract_edges()
+        reeb.set_persistence()
+        return reeb
+
 
 def test():
     import matplotlib.pyplot as plt
@@ -315,8 +349,13 @@ def test():
 
     # data = morse.field_generator.gen_sincos_field(200, 200, 0.3, 0.2)
     # data = morse.field_generator.gen_field_from_file("C:/data/test.bmp", conditions='plain')
+    # data = morse.field_generator.gen_field_from_file(
+    #     "C:/data/hmi/processed/AR12673/hmi_m_45s_2017_09_06_07_24_45_tai_magnetogram.fits",
+    #     filetype='fits',
+    #     conditions='plain')
+    #
     data = morse.field_generator.gen_field_from_file(
-        "C:/data/hmi/processed/AR12673/hmi_m_45s_2017_09_06_07_24_45_tai_magnetogram.fits",
+        "C:/data/hmi/processed/AR12673/hmi_m_45s_2017_09_06_02_01_30_tai_magnetogram.fits",
         filetype='fits',
         conditions='plain')
 
@@ -350,6 +389,6 @@ def test():
 
     reeb.contract_edges()
 
-    reeb.draw()
+    reeb.draw_3d()
 
 test()
