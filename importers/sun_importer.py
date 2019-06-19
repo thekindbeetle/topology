@@ -9,6 +9,7 @@ from astropy import units as u
 from astropy.coordinates import SkyCoord
 
 import sunpy
+import sunpy.map
 from sunpy.net import hek, attrs as a
 from sunpy.coordinates import frames
 from sunpy.database import Database
@@ -30,7 +31,7 @@ def _get_coords_arcsec(coord1, coord2, obstime):
     return result_coord.Tx.value, result_coord.Ty.value
 
 
-def download_ar_hmi_data(ar_number, period=3600, database_path='D:/fits', half_image_size=100,
+def download_ar_hmi_data(ar_number, period=3600, database_path='D:/fits', half_image_size=150,
                          plot_evolution=False, silent=False):
     """
     Download Active Region data (in FITS format)
@@ -55,7 +56,7 @@ def download_ar_hmi_data(ar_number, period=3600, database_path='D:/fits', half_i
 
     client = hek.HEKClient()
 
-    result = client.search(hek.attrs.Time(START_TIME_HMI, datetime.now()), hek.attrs.AR.NOAANum == ar_number)
+    result = client.search(hek.attrs.Time(START_TIME_HMI, datetime.now()), hek.attrs.OBS.Observatory=='SDO', hek.attrs.AR.NOAANum == ar_number)
     result = [e for e in result if e['search_instrument'] == 'HMI']
 
     print('{num} events in AR {ar} found'.format(num=len(result), ar=ar_number))
@@ -98,8 +99,12 @@ def download_ar_hmi_data(ar_number, period=3600, database_path='D:/fits', half_i
 
     for file_num in list(range(len(file_names))):
         fname = file_names[file_num]
-        mp = sunpy.map.Map(fname)
-
+        try:
+            mp = sunpy.map.Map(fname)
+        except TypeError:
+            print('File {f} is corrupted'.format(f=fname))
+            continue
+        
         # Переводим координаты в гелиопроективные
         center_point = _get_coords_arcsec(centers_x_fit[file_num], centers_y[file_num], mp.date)
 
@@ -113,14 +118,17 @@ def download_ar_hmi_data(ar_number, period=3600, database_path='D:/fits', half_i
         # Вырезаем кусок из карты
         cut_map = mp.submap(lower_left, upper_right)
 
-        if not os.path.exists('./data/processed/AR{ar_number}'.format(ar_number=ar_number)):
-            os.makedirs('./data/processed/AR{ar_number}'.format(ar_number=ar_number))
+        if not os.path.exists('./processed/AR{ar_number}'.format(ar_number=ar_number)):
+            os.makedirs('./processed/AR{ar_number}'.format(ar_number=ar_number))
 
-        save_path = './data/processed/AR{ar_number}/{fnum}.fits'.format(ar_number=ar_number,fnum=file_num)
+        # save_path = './processed/AR{ar_number}/{fnum}.fits'.format(ar_number=ar_number,fnum=file_num)
+        short_name = os.path.basename(fname)
+        save_path = 'C:/data/hmi/processed/AR{ar_number}/{fname}'.format(ar_number=ar_number,fname=short_name)
 
         if os.path.exists(save_path):
             os.remove(save_path)
         cut_map.save(save_path)
+        print('File {f} saved'.format(f=save_path))
 
         # If needed plot every 10th submap.
         if plot_evolution and (file_num % 10 == 1):
