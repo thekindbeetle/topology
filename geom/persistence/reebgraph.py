@@ -166,7 +166,7 @@ class ReebGraph:
                     self.split_tree.append([i, lowest_vertex[uf.find(j)]])
                     uf.union(i, j)
                     lowest_vertex[uf.find(j)] = i
-
+                    
     def convert_to_nx_graphs(self):
         self.split_graph = nx.DiGraph()
         self.merge_graph = nx.DiGraph()
@@ -175,21 +175,17 @@ class ReebGraph:
         self.split_graph.add_edges_from(self.split_tree)
         self.merge_graph.add_edges_from(self.merge_tree)
 
-    def set_critical_index_and_colors(self):
+    def set_morse_index(self):
         morse_index = dict([(node, -1) for node in self.reeb_graph_augmented.nodes])
         colors = dict([(node, (0, 0, 0)) for node in self.reeb_graph_augmented.nodes])
 
         for i in self.reeb_graph_augmented.nodes:
-            if self.reeb_graph_augmented.in_degree(i) == 0:# and (self.reeb_graph_augmented.out_degree(i) == 1):
+            if self.reeb_graph_augmented.in_degree(i) == 0:
                 morse_index[i] = 0
-                colors[i] = (0, 0, 1)
-            elif self.reeb_graph_augmented.out_degree(i) == 0:# and (self.reeb_graph_augmented.in_degree(i) == 1):
+            elif self.reeb_graph_augmented.out_degree(i) == 0:
                 morse_index[i] = 2
-                colors[i] = (1, 0, 0)
-            else: # (self.reeb_graph_augmented.in_degree(i) > 1) or (self.reeb_graph_augmented.out_degree(i) > 1):
+            else: 
                 morse_index[i] = 1
-                colors[i] = (0, 0.5, 0)
-        nx.set_node_attributes(self.reeb_graph_augmented, colors, 'color')
         nx.set_node_attributes(self.reeb_graph_augmented, morse_index, 'morse_index')
 
     def cmp_augmented_reeb_graph(self):
@@ -198,9 +194,12 @@ class ReebGraph:
         Computing contour trees in all dimensions.
         Computational Geometry, 24(2), 75–94.
         """
+        mg = self.merge_graph.copy()
+        sg = self.split_graph.copy()
+        
         # 1. For each vertex xi, if up-degree in join tree + down-degree in split tree is 1, enqueue x_i.
         leaf_queue = deque(reversed([x for x in range(self.cell_num) if
-                                     self.merge_graph.in_degree(x) + self.split_graph.out_degree(x) == 1]))
+                                     mg.in_degree(x) + sg.out_degree(x) == 1]))
 
         # 2. Initialize contour tree to an empty graph on ||join tree|| vertices.
         self.reeb_graph_augmented = nx.DiGraph()
@@ -212,25 +211,25 @@ class ReebGraph:
             x = leaf_queue.pop()
 
             # If xi is an upper leaf
-            if self.merge_graph.in_degree[x] == 0:
-                if self.split_graph.out_degree[x] == 0:
+            if mg.in_degree[x] == 0:
+                if sg.out_degree[x] == 0:
                     break  # Вершина без рёбер
 
                 # find incident arc y_i y_j in join tree.
-                neighbour = list(self.merge_graph.successors(x))[0]
+                neighbour = list(mg.successors(x))[0]
                 self.reeb_graph_augmented.add_edge(x, neighbour)
             else:
                 # else find incident arc z_iz_j in split tree.
-                neighbour = list(self.split_graph.predecessors(x))[0]
+                neighbour = list(sg.predecessors(x))[0]
                 self.reeb_graph_augmented.add_edge(neighbour, x)
 
             # Remove node from split and merge graphs
             # See Definition 4.5 from H. Carr (2003)
-            self._reduce_node(self.merge_graph, x)
-            self._reduce_node(self.split_graph, x)
+            self._reduce_node(mg, x)
+            self._reduce_node(sg, x)
 
             # If x_j is now a leaf, enqueue x_j
-            if self.merge_graph.in_degree(neighbour) + self.split_graph.out_degree(neighbour) == 1:
+            if mg.in_degree(neighbour) + sg.out_degree(neighbour) == 1:
                 leaf_queue.append(neighbour)
                 
     def set_node_values_and_positions(self):
@@ -249,24 +248,81 @@ class ReebGraph:
         Могут случаться вырождения (таки мы с картинкой работаем, а не с триангуляцией) такого плана.
         Возникает минимум, соединённый с двумя сёдлами, либо максимум с двумя сёдлами.
         Мы заменяем его на седло, а минимум прикрепляем к нему.
+        
+        Если к седлу прикреплены и сверу, и снизу по два и более ребра, раздваиваем его.
         :return:
         """
         g = self.reeb_graph_augmented
         for v in list(g.nodes):
-            if g.in_degree(v) == 0 and g.out_degree(v) > 1:
+            indegree = g.in_degree(v)
+            outdegree = g.out_degree(v)
+            if indegree == 0 and outdegree > 1:
                 # Это минимум, который соединён с двумя вершинами.
                 # Он будет седлом, а к нему мы присобачим минимум.
-                new_node = v + 0.5
+                new_node = v - 0.1
                 g.add_node(new_node, value=g.node[v]['value'],
                                      position=(g.node[v]['position'][0] + 0.5, g.node[v]['position'][1] + 0.5))
                 g.add_edge(new_node, v)
-            if g.out_degree(v) == 0 and g.in_degree(v) > 1:
+            elif outdegree == 0 and indegree > 1:
                 # Это максимум, который соединён с двумя вершинами.
                 # Он будет седлом, а к нему мы присобачим максимум.
-                new_node = v + 0.5
+                new_node = v + 0.1
                 g.add_node(new_node, value=g.node[v]['value'],
                                      position=(g.node[v]['position'][0] + 0.5, g.node[v]['position'][1] + 0.5))
                 g.add_edge(v, new_node)
+            elif indegree >= 2 and outdegree >= 2:
+                # К седлу прикреплены хотя бы по две стрелки снизу и сверху.
+                # Раздваиваем его.
+                new_node = v - 0.1
+                g.add_node(new_node, value=g.node[v]['value'],
+                                     position=(g.node[v]['position'][0] + 0.5, g.node[v]['position'][1] + 0.5))
+                # Пересаживаем входящие рёбра
+                for u in list(g.predecessors(v)):
+                    g.remove_edge(u, v)
+                    g.add_edge(u, new_node)
+                g.add_edge(new_node, v)
+                
+        # После этого из вырождений могли остаться только сёдла, соединённые с > 2 минимумами или > 2 максимумами.
+        # Разрешаем эти сёдла.
+        for v in list(g.nodes):
+            if g.in_degree(v) > 2:
+                # Добавка к номеру нода.
+                #! SIC: потенциально узкое место при масштабировании.
+                eps = 0.1
+                # Добавляем седло для всех, начиная с третьего (первые два минимума оставляем).
+                for pred in list(g.predecessors(v))[2:]:
+                    new_node = v + eps
+                    eps = eps**2
+                    
+                    g.add_node(new_node, value=g.node[v]['value'],
+                                         position=(g.node[v]['position'][0] + eps, g.node[v]['position'][1] + eps))
+                    g.add_edge(pred, new_node)
+                    g.remove_edge(pred, v)
+                    
+                    for u in list(g.successors(v)):
+                        g.remove_edge(v, u)
+                        g.add_edge(new_node, u)
+                    
+                    g.add_edge(v, new_node)
+            
+            if g.out_degree(v) > 2:
+                # Добавка к номеру нода.
+                eps = 0.1
+                # Добавляем седло для всех, начиная с третьего (первые два максимума оставляем).
+                for succ in list(g.successors(v))[2:]:
+                    new_node = v - eps
+                    eps = eps**2
+                    
+                    g.add_node(new_node, value=g.node[v]['value'],
+                                         position=(g.node[v]['position'][0] + eps, g.node[v]['position'][1] + eps))
+                    g.add_edge(new_node, succ)
+                    g.remove_edge(v, succ)
+                    
+                    for u in list(g.predecessors(v)):
+                        g.remove_edge(u, v)
+                        g.add_edge(u, new_node)
+                    
+                    g.add_edge(new_node, v)
 
     def contract_edges(self):
         """
@@ -292,7 +348,9 @@ class ReebGraph:
         if background is None:
             background = self.data
         plt.matshow(background, cmap='gray', vmin=vmin, vmax=vmax)
-        colors = list(nx.get_node_attributes(self.reeb_graph_contracted, 'color').values())
+        morse_index = list(nx.get_node_attributes(self.reeb_graph_contracted, 'morse_index').values())
+        color_index = [(0, 0, 1), (0, 0.5, 0), (1, 0, 0)]
+        colors = [color_index[i] for i in morse_index]
         positions = nx.get_node_attributes(self.reeb_graph_contracted, 'position')
         nx.draw_networkx(self.reeb_graph_contracted, pos=positions, with_labels=False, node_size=50, node_color=colors)
         plt.xlim((0, background.shape[0]))
@@ -309,9 +367,11 @@ class ReebGraph:
         :return:
         """
         fig = plt.figure(figsize=(6, 12))
-        # ax = fig.add_subplot(111)
+        # ax = fig.add_subplot(111) 
         ax = plt.gca()
-        colors = list(nx.get_node_attributes(self.reeb_graph_contracted, 'color').values())
+        morse_index = list(nx.get_node_attributes(self.reeb_graph_contracted, 'morse_index').values())
+        color_index = [(0, 0, 1), (0, 0.5, 0), (1, 0, 0)]
+        colors = [color_index[i] for i in morse_index]
         positions = dict([(v, (self.critical_index[v], self.data[self.index[v][0], self.index[v][1]]))
                           for v in self.reeb_graph_contracted.nodes()])
         nx.draw_networkx_nodes(self.reeb_graph_contracted, pos=positions, with_labels=False, node_size=80,
@@ -392,7 +452,7 @@ class ReebGraph:
         r.cmp_augmented_reeb_graph()
         r.set_node_values_and_positions()
         r.check_graph_consistency()
-        r.set_critical_index_and_colors()
+        r.set_morse_index()
         r.reeb_graph_contracted = r.reeb_graph_augmented.copy(as_view=False)
         r.contract_edges()
         r.set_persistence()
@@ -422,4 +482,4 @@ def test():
     #     conditions='plain')
     #
 
-# test()
+test()
