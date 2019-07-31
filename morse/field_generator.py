@@ -176,9 +176,10 @@ def apply_conditions_to_field(field, conditions='torus', compression=10):
         return copy.deepcopy(field)
 
 
-def resize(field, multipliers=(10, 10), sigma=(25, 25), conditions='plain'):
+def resize(field, multipliers=(10, 10), sigma=(25, 25), gauss=True, conditions='plain'):
     """
     Расширение массива с последующим сглаживанием Гауссовским фильтром.
+    :param gauss: сглаживание Гауссом.
     :param conditions: граничные условия, накладываемые при применении фильтра.
     :param field: Входные данные.
     :param multipliers: Коэффициенты расширения изображения по осям.
@@ -190,10 +191,11 @@ def resize(field, multipliers=(10, 10), sigma=(25, 25), conditions='plain'):
         [np.concatenate([np.full(multipliers, field[i, j], dtype=field.dtype)
                          for i in range(field.shape[0])], axis=0)
          for j in range(field.shape[1])], axis=1)
-    if conditions == 'plain':
-      new_field = gaussian_filter(new_field, sigma)
-    elif conditions == 'torus':
-      new_field = gaussian_filter(new_field, sigma, mode='wrap')
+    if gauss:
+        if conditions == 'plain':
+          new_field = gaussian_filter(new_field, sigma)
+        elif conditions == 'torus':
+          new_field = gaussian_filter(new_field, sigma, mode='wrap')
     return new_field
 
 
