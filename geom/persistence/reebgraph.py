@@ -1,21 +1,75 @@
+import importlib
 import numpy as np
 import matplotlib.pyplot as plt
 import networkx as nx
 from collections import deque
 from morse.unionfind import UnionFind as UF
 
+# Check that Pygraphviz is installed.
+# If it is not, you cannot use dot program to draw Reeb graph.
+pygraphviz_spec = importlib.util.find_spec("pygraphviz")
+found_pygraphviz = pygraphviz_spec is not None
+
 
 class ReebGraph:
     """
     Reeb Graph computation for data on quad mesh on the plane.
+    We will compute Reeb Graph on ordered extended data,
+    but simplify on initial data.
     """
 
-    def __init__(self, data):
-        self.data = data  # Initial data (2D-array)
-        self.shape = data.shape
+    def __init__(self, initial_data):
+        self.initial_order = ReebGraph._define_order(initial_data)
+
+        w, h = initial_data.shape
+        eps = 1.0 / (initial_data.size * 4)
+        eps2 = eps ** 2
+
+        self.data = np.zeros((w * 2 - 1, h * 2 - 1))
+        self.data[0::2, 0::2] = initial_data
+
+        ext_order = np.zeros((w * 2 - 1, h * 2 - 1))
+        # "+1" because order contains zeros.
+        ext_order[0::2, 0::2] = self.initial_order + 1
+
+        # Рёбра одной ориентации
+        for i in range(w - 1):
+            for j in range(h):
+                left_n, right_n = ext_order[2 * i, 2 * j], ext_order[2 * i + 2, 2 * j]
+                left_v, right_v = self.data[2 * i, 2 * j], self.data[2 * i + 2, 2 * j]
+                min_n, max_n = min(left_n, right_n), max(left_n, right_n)
+                ext_order[2 * i + 1, 2 * j] = max_n + min_n * eps
+                self.data[2 * i + 1, 2 * j] = max(left_v, right_v)
+
+        # Рёбра другой ориентации
+        for i in range(w):
+            for j in range(h - 1):
+                bot_n, top_n = ext_order[2 * i, 2 * j], ext_order[2 * i, 2 * j + 2]
+                bot_v, top_v = self.data[2 * i, 2 * j], self.data[2 * i, 2 * j + 2]
+                min_n, max_n = min(bot_n, top_n), max(bot_n, top_n)
+
+                # "+1" because order contains zeros.
+                ext_order[2 * i, 2 * j + 1] = max_n + min_n * eps
+                self.data[2 * i, 2 * j + 1] = max(bot_v, top_v)
+
+        # Грани
+        for i in range(w - 1):
+            for j in range(h - 1):
+                verts = [ext_order[2 * i, 2 * j], ext_order[2 * i, 2 * j + 2],
+                         ext_order[2 * i + 2, 2 * j + 2], ext_order[2 * i + 2, 2 * j]]
+                verts_v = [self.data[2 * i, 2 * j], self.data[2 * i, 2 * j + 2],
+                           self.data[2 * i + 2, 2 * j + 2], self.data[2 * i + 2, 2 * j]]
+                verts.sort(reverse=True)
+
+                # "+1" because order contains zeros.
+                ext_order[2 * i + 1, 2 * j + 1] = verts[0] + verts[1] * eps + verts[2] * eps2
+                self.data[2 * i + 1, 2 * j + 1] = max(verts_v)
+
+        self.order = ReebGraph._define_order(ext_order)
+
+        self.shape = self.data.shape
         self.index = None  # Ячейки в порядке возрастания значений
-        self.cell_num = data.size
-        self.order = np.zeros(data.shape)  # Номера ячеек на сетке
+        self.cell_num = self.data.size
 
         self.merge_tree = []
         self.split_tree = []
@@ -25,7 +79,15 @@ class ReebGraph:
         self.reeb_graph_augmented = nx.DiGraph()
         self.reeb_graph_contracted = nx.DiGraph()
 
-    def _reduce_node(self, graph, node, set_persistence=False):
+    @staticmethod
+    def _define_order(data):
+        order = np.zeros(data.size, dtype=np.int)
+        order[data.flatten().argsort()] = np.arange(0, data.size, dtype=np.int)
+        order = order.reshape(data.shape)
+        return order
+
+    @staticmethod
+    def _reduce_node(graph, node, set_persistence=False):
         """
         Remove node from graph.
         Works only with 1-1 degree and 0-1 degree vertices.
@@ -42,22 +104,7 @@ class ReebGraph:
                 graph.add_edge(prev_neighbour, next_neighbour)
         graph.remove_node(node)
 
-    def reduce_node_and_set_persistence(self, node):
-        """
-        Reduce node from graph if it is possible.
-        Set persistence to the new edge
-        :param node:
-        :return:
-        """
-        graph = self.reeb_graph_contracted
-        if graph.in_degree(node) == 1 and graph.out_degree(node) == 1:
-            prev_neighbour = list(graph.predecessors(node))[0]
-            next_neighbour = list(graph.successors(node))[0]
-            graph.add_edge(prev_neighbour, next_neighbour,
-                           persistence=graph[next_neighbour]['value'] - graph[prev_neighbour]['value'])
-            graph.remove_node(node)
-
-    def _reduce_edge(self, e):
+    def _reduce_edge(self, e, verbose=False):
         """
         Contract edge in graph.
         We allow only saddle-extrema edge contraction.
@@ -65,17 +112,17 @@ class ReebGraph:
         """
         graph = self.reeb_graph_contracted
         if graph.node[e[0]]['morse_index'] == 0:
-            print('Minimum ', e[0])
-            print('Saddle ', e[1])
+            if verbose:
+                print('Minimum ', e[0])
+                print('Saddle ', e[1])
 
             if graph.out_degree(e[0]) == 1 and graph.in_degree(e[1]) >= 2:
                 graph.remove_node(e[0])
-                print('Remove', e[0])
+                if verbose:
+                    print('Remove', e[0])
                 return True
             else:
                 return False
-            # self.reduce_node_and_set_persistence(e[1])
-            # print('Reduce', e[1])
         elif graph.node[e[1]]['morse_index'] == 2:
             print('Maximum ', e[1])
             print('Saddle ', e[0])
@@ -86,12 +133,14 @@ class ReebGraph:
                 return True
             else:
                 return False
-            # self.reduce_node_and_set_persistence(e[0])
-            # print('Reduce', e[0])
         else:
             return False
 
     def _neighbours(self, i, j):
+        """
+        Get list of neighbors.
+        We use topology of plane (R^2) without boundary conditions.
+        """
         if i == 0:
             if j == 0:
                 return [(0, 1), (1, 0)]
@@ -113,6 +162,16 @@ class ReebGraph:
                 return [(i - 1, j), (i, j - 1), (i + 1, j)]
             else:
                 return [(i - 1, j), (i + 1, j), (i, j - 1), (i, j + 1)]
+                
+    def _is_edge_contractible(self, v1, v2):
+        g = self.reeb_graph_contracted
+        idx1, idx2 = g.nodes[v1]['morse_index'], g.nodes[v2]['morse_index']
+        
+        # We cannot remove saddle-saddle pair;
+        # also we cannot remove lonely minimum or lonely maximum.
+        return not((idx1 == 1 and idx2 == 1) or
+                   (idx1 == 0 and g.in_degree(v2) == 1) or
+                   (idx2 == 2 and g.out_degree(v1) == 1))
 
     def make_index(self):
         """
@@ -120,12 +179,9 @@ class ReebGraph:
         :return: List of pairs [x, y] of array cells sorted by values.
         """
         y, x = np.meshgrid(range(self.shape[1]), range(self.shape[0]))
-        flatten_data = self.data.flatten()
+        flatten_data = self.order.flatten()
         self.index = np.dstack((x.flatten()[flatten_data.argsort()],
                                 y.flatten()[flatten_data.argsort()]))[0]
-        self.order = np.zeros(self.cell_num, dtype=np.int)
-        self.order[flatten_data.argsort()] = np.arange(0, self.cell_num, dtype=np.int)
-        self.order = self.order.reshape(self.shape)
 
     def cmp_merge_and_split_trees(self):
         """
@@ -177,12 +233,14 @@ class ReebGraph:
 
     def set_morse_index(self):
         morse_index = dict([(node, -1) for node in self.reeb_graph_augmented.nodes])
-        colors = dict([(node, (0, 0, 0)) for node in self.reeb_graph_augmented.nodes])
+        
+        in_degree = self.reeb_graph_augmented.in_degree
+        out_degree = self.reeb_graph_augmented.out_degree
 
         for i in self.reeb_graph_augmented.nodes:
-            if self.reeb_graph_augmented.in_degree(i) == 0:
+            if in_degree[i] == 0:
                 morse_index[i] = 0
-            elif self.reeb_graph_augmented.out_degree(i) == 0:
+            elif out_degree[i] == 0:
                 morse_index[i] = 2
             else: 
                 morse_index[i] = 1
@@ -243,87 +301,6 @@ class ReebGraph:
         nx.set_node_attributes(self.reeb_graph_augmented, values, name="value")
         nx.set_node_attributes(self.reeb_graph_augmented, positions, name="position")
 
-    def check_graph_consistency(self):
-        """
-        Могут случаться вырождения (таки мы с картинкой работаем, а не с триангуляцией) такого плана.
-        Возникает минимум, соединённый с двумя сёдлами, либо максимум с двумя сёдлами.
-        Мы заменяем его на седло, а минимум прикрепляем к нему.
-        
-        Если к седлу прикреплены и сверу, и снизу по два и более ребра, раздваиваем его.
-        :return:
-        """
-        g = self.reeb_graph_augmented
-        for v in list(g.nodes):
-            indegree = g.in_degree(v)
-            outdegree = g.out_degree(v)
-            if indegree == 0 and outdegree > 1:
-                # Это минимум, который соединён с двумя вершинами.
-                # Он будет седлом, а к нему мы присобачим минимум.
-                new_node = v - 0.1
-                g.add_node(new_node, value=g.node[v]['value'],
-                                     position=(g.node[v]['position'][0] + 0.5, g.node[v]['position'][1] + 0.5))
-                g.add_edge(new_node, v)
-            elif outdegree == 0 and indegree > 1:
-                # Это максимум, который соединён с двумя вершинами.
-                # Он будет седлом, а к нему мы присобачим максимум.
-                new_node = v + 0.1
-                g.add_node(new_node, value=g.node[v]['value'],
-                                     position=(g.node[v]['position'][0] + 0.5, g.node[v]['position'][1] + 0.5))
-                g.add_edge(v, new_node)
-            elif indegree >= 2 and outdegree >= 2:
-                # К седлу прикреплены хотя бы по две стрелки снизу и сверху.
-                # Раздваиваем его.
-                new_node = v - 0.1
-                g.add_node(new_node, value=g.node[v]['value'],
-                                     position=(g.node[v]['position'][0] + 0.5, g.node[v]['position'][1] + 0.5))
-                # Пересаживаем входящие рёбра
-                for u in list(g.predecessors(v)):
-                    g.remove_edge(u, v)
-                    g.add_edge(u, new_node)
-                g.add_edge(new_node, v)
-                
-        # После этого из вырождений могли остаться только сёдла, соединённые с > 2 минимумами или > 2 максимумами.
-        # Разрешаем эти сёдла.
-        for v in list(g.nodes):
-            if g.in_degree(v) > 2:
-                # Добавка к номеру нода.
-                #! SIC: потенциально узкое место при масштабировании.
-                eps = 0.1
-                # Добавляем седло для всех, начиная с третьего (первые два минимума оставляем).
-                for pred in list(g.predecessors(v))[2:]:
-                    new_node = v + eps
-                    eps = eps**2
-                    
-                    g.add_node(new_node, value=g.node[v]['value'],
-                                         position=(g.node[v]['position'][0] + eps, g.node[v]['position'][1] + eps))
-                    g.add_edge(pred, new_node)
-                    g.remove_edge(pred, v)
-                    
-                    for u in list(g.successors(v)):
-                        g.remove_edge(v, u)
-                        g.add_edge(new_node, u)
-                    
-                    g.add_edge(v, new_node)
-            
-            if g.out_degree(v) > 2:
-                # Добавка к номеру нода.
-                eps = 0.1
-                # Добавляем седло для всех, начиная с третьего (первые два максимума оставляем).
-                for succ in list(g.successors(v))[2:]:
-                    new_node = v - eps
-                    eps = eps**2
-                    
-                    g.add_node(new_node, value=g.node[v]['value'],
-                                         position=(g.node[v]['position'][0] + eps, g.node[v]['position'][1] + eps))
-                    g.add_edge(new_node, succ)
-                    g.remove_edge(v, succ)
-                    
-                    for u in list(g.predecessors(v)):
-                        g.remove_edge(u, v)
-                        g.add_edge(u, new_node)
-                    
-                    g.add_edge(new_node, v)
-
     def contract_edges(self):
         """
         Contract edges of the augmented Reeb graph.
@@ -340,8 +317,26 @@ class ReebGraph:
                                 self.reeb_graph_contracted.node[e[0]]['value'])
                             for e in self.reeb_graph_contracted.edges])
         nx.set_edge_attributes(self.reeb_graph_contracted, persistence, 'persistence')
+        
+    def draw_reebgraph(self, annotate=True):
+        """
+        Draw contracted Reeb Graph.
+        This method uses dot layout, so GraphViz dot and pygraphviz are required.
+        """        
+        if not found_pygraphviz:
+            print("You cannot draw Reeb graph without Graphviz and Pygraphviz libraries!")
+            return
+            
+        g = self.reeb_graph_contracted
+        positions = nx.nx_agraph.pygraphviz_layout(g, prog='dot')
+        morse_index = list(nx.get_node_attributes(g, 'morse_index').values())
+        color_index = [(0, 0, 1), (0, 0.5, 0), (1, 0, 0)]
+        colors = [color_index[i] for i in morse_index]
+        nx.draw(g, positions, node_size=50, node_color=colors, with_labels=False)
+        if annotate:
+            nx.draw_networkx_labels(g, positions, labels=dict(list(zip(list(g.nodes), list(map(str, list(g.nodes)))))))
 
-    def draw(self, background=None, vmin=-2000, vmax=2000):
+    def draw2d(self, background=None, vmin=-2000, vmax=2000):
         """
         :param background: background image (By default, self.data)
         """
@@ -353,18 +348,13 @@ class ReebGraph:
         colors = [color_index[i] for i in morse_index]
         positions = nx.get_node_attributes(self.reeb_graph_contracted, 'position')
         nx.draw_networkx(self.reeb_graph_contracted, pos=positions, with_labels=False, node_size=50, node_color=colors)
-        plt.xlim((0, background.shape[0]))
-        plt.ylim((0, background.shape[1]))
+        plt.xlim((0, background.shape[1]))
+        plt.ylim((0, background.shape[0]))
         plt.colorbar()
 
-    def draw_schema(self, zmin=-3000, zmax=3000, title='', fname=None):
+    def draw_schema(self, zmin=-3000, zmax=3000, title=''):
         """
-        Рисуем граф Риба по трём уровням (минимумы, сёдла и максимумы).
-        :param zmin:
-        :param zmax:
-        :param title:
-        :param fname:
-        :return:
+        Draw 3-level Reeb Graph.
         """
         fig = plt.figure(figsize=(6, 12))
         # ax = fig.add_subplot(111) 
@@ -379,16 +369,10 @@ class ReebGraph:
         nx.draw_networkx_edges(self.reeb_graph_contracted, pos=positions, with_labels=False, node_size=80, ax=ax)
         ax.set_xlim(-0.5, 2.5)
         ax.set_ylim(zmin, zmax)
-        plt.grid('on')
+        plt.grid('on')  # TODO: show ticks!
 
-        # TODO: show ticks!
-
-        if fname is not None:
-            fig.savefig(fname)
-            plt.close()
-
-    def draw_3d(self, draw_edges=False, use_threshold=True, threshold=20, xmin=0, ymin=0, xmax=None, ymax=None,
-                zmin=-3000, zmax=3000, title='', fname=None):
+    def draw3d(self, draw_edges=False, use_threshold=True, threshold=20, xmin=0, ymin=0, xmax=None, ymax=None,
+               zmin=-3000, zmax=3000, title='', fname=None):
         """
         :param draw_edges: Рисовать рёбра
         :param use_threshold: Не показывать маленькие экстремумы.
@@ -438,6 +422,62 @@ class ReebGraph:
             fig.savefig(fname)
             plt.close()
 
+    def persistence_simplification(self, level):
+        """
+        Persistence simplification of Reeb graph.
+        :param level: level of simplification.
+        """
+        import heapq
+        
+        g = self.reeb_graph_contracted
+        edge_persistence = nx.get_edge_attributes(g, 'persistence')
+        
+        # Create Priority Queue of contractable edges.
+        # Main principle: If edge was not contractible it will not be contractible.
+        heap = [(edge_persistence[e], e) for e in g.edges if self._is_edge_contractible(e[0], e[1])]
+
+        if not heap:  # If heap is empty, then there's nothing to simplify.
+            return
+
+        heapq.heapify(heap)
+        
+        curr_persistence, curr_edge = heapq.heappop(heap)
+
+        while curr_persistence < level:
+            # Some edges are already removed.
+            # But we cannot remove edge DIRECTLY from heap (it's inefficient)
+            if g.has_edge(*curr_edge):
+                if self._is_edge_contractible(*curr_edge):
+                    # plt.figure()
+                    # self.draw_reebgraph()
+                    # plt.show()
+                    if g.nodes[curr_edge[1]]['morse_index'] == 1:
+                        # Remove maximum
+                        g.remove_node(curr_edge[0])
+                        saddle = curr_edge[1]
+                    else:
+                        # Remove minimum
+                        g.remove_node(curr_edge[1])
+                        saddle = curr_edge[0]
+                        
+                    # Check whether we can remove saddle.
+                    # In general - we can. But there exist degenerations.
+                    if g.in_degree(saddle) == 1 and g.out_degree(saddle) == 1:
+                        # Если у седла входящая и выходящая степени равны 1, то
+                        # удаляем седло и стягиваем его соседей в ребро.
+                        prev_neighbour = list(g.predecessors(saddle))[0]
+                        next_neighbour = list(g.successors(saddle))[0]
+                        g.remove_node(saddle)
+                        
+                        new_edge_persistence = g.nodes[next_neighbour]['value'] - g.nodes[prev_neighbour]['value']
+                        g.add_edge(prev_neighbour, next_neighbour, persistence=new_edge_persistence)
+                        
+                        if self._is_edge_contractible(prev_neighbour, next_neighbour):
+                            heapq.heappush(heap, (new_edge_persistence, (prev_neighbour, next_neighbour)))
+            if not heap:
+                return
+            curr_persistence, curr_edge = heapq.heappop(heap)
+            
     @staticmethod
     def build_all(data):
         """
@@ -451,7 +491,6 @@ class ReebGraph:
         r.convert_to_nx_graphs()
         r.cmp_augmented_reeb_graph()
         r.set_node_values_and_positions()
-        r.check_graph_consistency()
         r.set_morse_index()
         r.reeb_graph_contracted = r.reeb_graph_augmented.copy(as_view=False)
         r.contract_edges()
@@ -461,18 +500,27 @@ class ReebGraph:
 
 def test():
     import morse.field_generator
-    data = np.array([
-        [1.0, 2.0, 1.5],
-        [2.5, 5.0, 1.6],
-        [1.2, 2.2, 1.7],
-        [2.5, 5.0, 1.6],
-        [1.0, 2.0, 1.5]
-    ])
-    data = morse.field_generator.\
-        gen_gaussian_sum_rectangle(50, 50, [(10, 10), (15, 15), (10, 15), (20, 5)], 3)
-    r = ReebGraph.build_all(data)
-    print(nx.get_node_attributes(r.reeb_graph_contracted, 'value'))
-    print(nx.get_edge_attributes(r.reeb_graph_contracted, 'persistence'))
+    # data = np.array([
+    #     [1.0, 2.0, 1.5],
+    #     [2.5, 5.0, 1.6],
+    #     [1.2, 2.2, 1.7],
+    #     [2.5, 5.0, 1.6],
+    #     [1.0, 2.0, 1.5]
+    # ])
+    # data = morse.field_generator.\
+    #     gen_gaussian_sum_rectangle(50, 50, [(10, 10), (15, 15), (10, 15), (20, 5)], 3)
+    # data = morse.field_generator.perturb(data)
+    im = morse.field_generator.gen_field_from_file('C:/data/test.fits', filetype='fits', conditions='plain')
+    r = ReebGraph.build_all(im)
+    # print(nx.get_node_attributes(r.reeb_graph_contracted, 'value'))
+    # print(nx.get_edge_attributes(r.reeb_graph_contracted, 'persistence'))
+
+    r.persistence_simplification(1000)
+
+    print(len(r.reeb_graph_contracted.nodes))
+    plt.figure()
+    r.draw_reebgraph()
+    plt.show()
 
     # data = morse.field_generator.gen_sincos_field(200, 200, 0.3, 0.2)
     # data = morse.field_generator.gen_field_from_file("C:/data/test.bmp", conditions='plain')
@@ -482,4 +530,4 @@ def test():
     #     conditions='plain')
     #
 
-test()
+# test()
