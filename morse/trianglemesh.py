@@ -3,8 +3,8 @@ import matplotlib.collections as mc
 import numpy as np
 import functools
 
-
 CONDITIONS = ('torus', 'plain', 'cylinder_x', 'cylinder_y')
+
 
 def test():
     import morse.field_generator as gen
@@ -17,17 +17,18 @@ def test():
     gen.perturb(image2)
 
     t_start = time.time()
-    mesh = TriangMesh.build_all(image1, image2)
+    mesh = TriangleMesh.build_all(image1, image2)
     t_finish = time.time()
     print(t_finish - t_start)
 
     mesh.draw()
 
 
-class TriangMesh:
+class TriangleMesh:
     """
-    Треугольная сетка.
+    Треугольная сетка, на которой мы считаем множество Якоби.
     Квадратная сетка, разделённая диагоналями.
+    TODO: здесь вроде бы должно всё параллелиться, но у меня не получается ускорить.
     """
 
     def __init__(self, lx, ly, conditions='torus'):
@@ -107,7 +108,6 @@ class TriangMesh:
         self.diag_edges = [(idx,
                             (((idx + 1) % self.sizeY) + ((idx // self.sizeY + 1) % self.size) * self.sizeY) % self.size)
                            for idx in range(self.size - self.sizeY)]
-
 
     def set_field(self, field):
         """
@@ -220,14 +220,18 @@ class TriangMesh:
         # Верхняя и нижняя вершины
         y = self.value(field_idx, self._vtop(idx)) - self.value(field_idx, self._vbottom(idx)) + 0.5 * (
             # Диагональные вершины. Делим на 2, т. к. удалённость на sqrt(2) и при проецировании ещё делим на sqrt(2).
-            self.value(field_idx, self._vleft(self._vtop(idx))) + self.value(field_idx, self._vright(self._vtop(idx))) -
-            self.value(field_idx, self._vleft(self._vbottom(idx))) - self.value(field_idx, self._vright(self._vbottom(idx)))
+                self.value(field_idx, self._vleft(self._vtop(idx))) + self.value(field_idx,
+                                                                                 self._vright(self._vtop(idx))) -
+                self.value(field_idx, self._vleft(self._vbottom(idx))) - self.value(field_idx,
+                                                                                    self._vright(self._vbottom(idx)))
         )
 
         x = self.value(field_idx, self._vright(idx)) - self.value(field_idx, self._vleft(idx)) + 0.5 * (
             # Диагональные вершины. Делим на 2, т. к. удалённость на sqrt(2) и при проецировании ещё делим на sqrt(2).
-            self.value(field_idx, self._vbottom(self._vright(idx))) + self.value(field_idx, self._vtop(self._vright(idx))) -
-            self.value(field_idx, self._vbottom(self._vleft(idx))) - self.value(field_idx, self._vtop(self._vleft(idx)))
+                self.value(field_idx, self._vbottom(self._vright(idx))) + self.value(field_idx,
+                                                                                     self._vtop(self._vright(idx))) -
+                self.value(field_idx, self._vbottom(self._vleft(idx))) - self.value(field_idx,
+                                                                                    self._vtop(self._vleft(idx)))
         )
 
         return x, y
@@ -362,7 +366,8 @@ class TriangMesh:
         return mc.LineCollection(map(lambda e: tuple(map(self._coords, e)),
                                      [e for e in edges if self._is_edge_internal(e)]), colors='k', linewidths=1)
 
-    def draw(self, field_idx=0, draw_image=True, draw_grid=False, annotate_points=False, fname=None, draw_jacobi_set=(0, 1)):
+    def draw(self, field_idx=0, draw_image=True, draw_grid=False, annotate_points=False, fname=None,
+             draw_jacobi_set=(0, 1)):
         plt.style.use('ggplot')
         plt.figure(figsize=(25.1, 35.4), dpi=100)
         ax = plt.gca()
@@ -390,11 +395,12 @@ class TriangMesh:
         :param field:
         :return:
         """
-        tr_mesh = TriangMesh(*field1.shape, conditions=conditions)
+        tr_mesh = TriangleMesh(*field1.shape, conditions=conditions)
         tr_mesh.set_field(field1)
         tr_mesh.set_field(field2)
         tr_mesh.cmp_jacobi_set()
         return tr_mesh
+
 
 test()
 # field = np.zeros((3, 4))
@@ -405,4 +411,3 @@ test()
 # print(t.diag_edges)
 # t.draw(draw_grid=True)
 # plt.show()
-

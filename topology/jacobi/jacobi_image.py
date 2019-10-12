@@ -2,7 +2,7 @@ import numpy as np
 import skimage.morphology
 import skimage.filters
 import skimage.measure
-import morse.triangmesh
+import morse.trianglemesh
 from copy import copy
 
 
