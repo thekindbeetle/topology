@@ -11,10 +11,10 @@ class Persistence:
     numOfCycles = None
 
     # Components at all levels.
-    numOfComponents = None
+    comp_num = None
 
     # Big components at all levels.
-    numOfBigComponents = None
+    # numOfBigComponents = None
 
     # Здесь хранятся индексы компонент связности
     _parentOfSimplex = None
@@ -47,8 +47,8 @@ class Persistence:
         self.filtration = filtration
         simp_num = filtration.simplexes_num()
 
-        self.numOfComponents = [0 for i in range(simp_num)]
-        self.numOfBigComponents = [0 for i in range(simp_num)]
+        self.comp_num = [0 for i in range(simp_num)]
+        # self.numOfBigComponents = [0 for i in range(simp_num)]
         self.numOfCycles = [0 for i in range(simp_num)]
         self._parentOfSimplex = []
         self._compBirthTimes = []
@@ -145,15 +145,6 @@ class Persistence:
                     curr_cycles_num -= 1  # число циклов увеличилось на 1
             self.numOfCycles[filt_idx - 1] = curr_cycles_num     # количество циклов на текущем уровне
 
-        # Этот кусок кода обрабатываем списки _cycleBirthTimes и _cycleDeathTimes, выкидывая избыточные значения,
-        # т. е. те, где время рождения или смерти равно -1.
-
-        # for idx in range(self.filtration.simplexes_num() - 1):  # -1, так как не учитываем внешность
-        #     if self._cycleBirthTimes[idx] != -1 and self._cycleDeathTimes[idx] != -1 and\
-        #                     self._cycleBirthTimes[idx] != self._cycleDeathTimes[idx]:
-        #         self.cycleBirthTimes.add(_cycleBirthTimes[i]);
-        #         cycleDeathTimes.add(_cycleDeathTimes[i]);
-
     def init_components_data(self):
         self._compBirthTimes = [-1 for i in range(self.filtration.simplexes_num())]
         self._compDeathTimes = [-1 for i in range(self.filtration.simplexes_num())]
@@ -217,19 +208,8 @@ class Persistence:
                     points_count_in_component[min_idx] = 0
                     self._compDeathTimes[min_idx] = self.filtration.get_simplex(filt_idx).appTime
                     curr_comp_num -= 1  # Число компонент связности уменьшилось на 1
-            self.numOfComponents[filt_idx] = curr_comp_num
+            self.comp_num[filt_idx] = curr_comp_num
             self.numOfBigComponents[filt_idx] = curr_big_comp_num
-
-        # Этот кусок кода обрабатываем списки _compBirthTimes и _compDeathTimes, выкидывая избыточные значения,
-        # т. е. те, где время рождения или смерти равно -1.
-
-        # for (int i = 0; i < _f.simpNumber(); i++) {
-        #     if (_compBirthTimes[i] != -1 && _compDeathTimes[i] != -1 && _compBirthTimes[i] != _compDeathTimes[i]) {
-        #         compBirthTimes.add(_compBirthTimes[i]);
-        #         compDeathTimes.add(_compDeathTimes[i]);
-        #     }
-        # }
-
 
 def test():
     import matplotlib.pyplot as plt
@@ -245,8 +225,10 @@ def test():
         [-1.0, 8.0]
     ]
     plt.plot(*np.transpose(points), 'ok')
-    f = geom.persistence.filtration.Filtration(points)
+    f = geom.persistence.filtration.Filtration.from_points(*np.transpose(points)[0], *np.transpose(points))
     f.print()
     pers = Persistence(f)
     print(pers._compBirthTimes)
     print(pers._compDeathTimes)
+
+test()

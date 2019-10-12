@@ -8,7 +8,7 @@ from bitarray import bitarray
 from collections import deque
 import networkx as nx
 
-import morse._unionfind
+import morse.unionfind
 import copy
 import re
 import warnings
@@ -84,20 +84,6 @@ class TorusMesh:
         Глобальный индекс вершины по координатам сетки.
         """
         return x * self.sizeY + y
-
-    def _coords(self, idx):
-        """
-        Координаты центра клетки (вершины, ребра или ячейки)
-        X и Y меняем местами!
-        """
-        if idx < self.size:
-            return self.coordy(idx), self.coordx(idx)
-        elif idx < self.size * 2:
-            return self.coordy(self._verts(idx)[0]), self.coordx(self._verts(idx)[0]) + 0.5
-        elif idx < self.size * 3:
-            return self.coordy(self._verts(idx)[0]) + 0.5, self.coordx(self._verts(idx)[0])
-        else:
-            return self.coordy(self._verts(idx)[0]) + 0.5, self.coordx(self._verts(idx)[0]) + 0.5
 
     def _vleft(self, idx):
         """
@@ -230,6 +216,20 @@ class TorusMesh:
         v = self._verts(idx)
         return tuple(sorted([self.value(v[i]) for i in range(len(v))], reverse=True))
 
+    def coords(self, idx):
+        """
+        Координаты центра клетки (вершины, ребра или ячейки)
+        X и Y меняем местами!
+        """
+        if idx < self.size:
+            return self.coordy(idx), self.coordx(idx)
+        elif idx < self.size * 2:
+            return self.coordy(self._verts(idx)[0]), self.coordx(self._verts(idx)[0]) + 0.5
+        elif idx < self.size * 3:
+            return self.coordy(self._verts(idx)[0]) + 0.5, self.coordx(self._verts(idx)[0])
+        else:
+            return self.coordy(self._verts(idx)[0]) + 0.5, self.coordx(self._verts(idx)[0]) + 0.5
+
     def coordx(self, idx):
         """
         Координата X вершины
@@ -303,8 +303,8 @@ class TorusMesh:
         :param ly:
         :return:
         """
-        return x <= self._coords(arc[0])[1] <= lx and y <= self._coords(arc[0])[0] <= ly and \
-               x <= self._coords(arc[-1])[1] <= lx and y <= self._coords(arc[-1])[0] <= ly
+        return x <= self.coords(arc[0])[1] <= lx and y <= self.coords(arc[0])[0] <= ly and \
+               x <= self.coords(arc[-1])[1] <= lx and y <= self.coords(arc[-1])[0] <= ly
 
     def is_arc_crossed_boundary(self, arc):
         """
@@ -516,8 +516,8 @@ class TorusMesh:
                 morse_index[p] = index
 
         # Устанавливаем координаты критических точек и индекс Морса в качестве атрибутов.
-        nx.set_node_attributes(self.msgraph, dict(list(map(lambda p: (p, self._coords(p)[0]), self.cr_cells))), "x")
-        nx.set_node_attributes(self.msgraph, dict(list(map(lambda p: (p, self._coords(p)[1]), self.cr_cells))), "y")
+        nx.set_node_attributes(self.msgraph, dict(list(map(lambda p: (p, self.coords(p)[0]), self.cr_cells))), "x")
+        nx.set_node_attributes(self.msgraph, dict(list(map(lambda p: (p, self.coords(p)[1]), self.cr_cells))), "y")
         nx.set_node_attributes(self.msgraph, morse_index, "morse_index")
 
         q = deque()
@@ -611,7 +611,7 @@ class TorusMesh:
         # Строим отображение критических точек в индекс битового массива меток
         idx_reverse = {self.cr_cells[cidx]: cidx for cidx in range(len(self.cr_cells))}
 
-        uf = morse._unionfind._UnionFind(critical_cells_num)
+        uf = morse.unionfind.UnionFind(critical_cells_num)
 
         # Cчитаем, что к этому моменту массив критических точек представляет собой фильтрацию.
         for i in range(len(self.cr_cells)):
@@ -1005,7 +1005,7 @@ class TorusMesh:
             edges = []
             for cidx in self.cr_cells:
                 for cidx2 in self.msgraph[cidx]:
-                    edges.append([self._coords(cidx), self._coords(cidx2)])
+                    edges.append([self.coords(cidx), self.coords(cidx2)])
             lc = mc.LineCollection(edges, colors='k', linewidths=2, zorder=1)
             plt.gca().add_collection(lc)
         if draw_gradient:
@@ -1014,8 +1014,8 @@ class TorusMesh:
                 if self.V[idx] is None:
                     continue
                 if idx < self.V[idx]:
-                    start = self._coords(idx)
-                    end = self._coords(self.V[idx])
+                    start = self.coords(idx)
+                    end = self.coords(self.V[idx])
                     if start[0] != 0 and end[0] != 0 and start[1] != 0 and end[1] != 0:
                         x.append(start[0])
                         y.append(start[1])
@@ -1027,25 +1027,25 @@ class TorusMesh:
             for arc in self.list_arcs():
                 if (cut is None) or self.is_arc_inner(arc, *cut):  # Отбрасываем граничные дуги
                     for idx in range(len(arc) - 1):
-                        edge = [self._coords(arc[idx]), self._coords(arc[idx + 1])]
+                        edge = [self.coords(arc[idx]), self.coords(arc[idx + 1])]
                         if np.abs(edge[0][0] - edge[1][0]) < 1 and np.abs(edge[0][1] - edge[1][1]) < 1:
-                            edges.append([self._coords(arc[idx]), self._coords(arc[idx + 1])])
+                            edges.append([self.coords(arc[idx]), self.coords(arc[idx + 1])])
             lc = mc.LineCollection(edges, colors='k', linewidths=1, zorder=1)
             plt.gca().add_collection(lc)
         if draw_crit_pts:
-            plt.scatter([self._coords(p)[0] for p in self.cp(0)], [self._coords(p)[1] for p in self.cp(0)], zorder=2, c='b', s=50)
-            plt.scatter([self._coords(p)[0] for p in self.cp(1)], [self._coords(p)[1] for p in self.cp(1)], zorder=2, c='g', s=50)
-            plt.scatter([self._coords(p)[0] for p in self.cp(2)], [self._coords(p)[1] for p in self.cp(2)], zorder=2, c='r', s=50)
+            plt.scatter([self.coords(p)[0] for p in self.cp(0)], [self.coords(p)[1] for p in self.cp(0)], zorder=2, c='b', s=50)
+            plt.scatter([self.coords(p)[0] for p in self.cp(1)], [self.coords(p)[1] for p in self.cp(1)], zorder=2, c='g', s=50)
+            plt.scatter([self.coords(p)[0] for p in self.cp(2)], [self.coords(p)[1] for p in self.cp(2)], zorder=2, c='r', s=50)
         if annotate_crit_points:
             for cidx in self.cr_cells:
-                plt.text(self._coords(cidx)[0], self._coords(cidx)[1], str(cidx))
+                plt.text(self.coords(cidx)[0], self.coords(cidx)[1], str(cidx))
         if annotate_values:
             for idx in range(self.size):
-                plt.text(self._coords(idx)[0], self._coords(idx)[1], '{:.2f}'.format(self.value(idx)))
+                plt.text(self.coords(idx)[0], self.coords(idx)[1], '{:.2f}'.format(self.value(idx)))
         if draw_persistence_pairs:
             edges = []
             for pairs in self.ppairs:
-                edges.append([self._coords(pairs[0]), self._coords(pairs[1])])
+                edges.append([self.coords(pairs[0]), self.coords(pairs[1])])
             lc = mc.LineCollection(edges, colors='r', linewidths=2, zorder=1)
             plt.gca().add_collection(lc)
         if fname:
@@ -1138,9 +1138,9 @@ def test2():
 def test3():
 
     import morse.field_generator
-    data = morse.field_generator.gen_field_from_file('/home/alexeev/data/example.bmp',
-                                                     filetype='bmp',
-                                                     conditions='plain')
+    data = morse.field_generator.gen_gaussian_sum_rectangle(50, 50,
+                [(10, 10), (15, 15), (10, 15), (20, 5)], 5)
+    data = morse.field_generator.perturb(data)
     m = TorusMesh.build_all(data)
     # m.simplify_by_level(70, method='arc')
     m.simplify_by_pairs_remained(20, method='arc')
@@ -1152,18 +1152,18 @@ def test3():
     m.draw()
     plt.show()
 
-    positions = dict(list(zip(nx.nodes(m.msgraph), list(zip(nx.get_node_attributes(m.msgraph, "x").values(),
-                                                            nx.get_node_attributes(m.msgraph, "y").values())))))
-    colors = ['b', 'g', 'r']
-    color_map = list(map(lambda v: colors[v], nx.get_node_attributes(m.msgraph, "morse_index").values()))
-
-    nx.draw(m.msgraph, pos=positions, node_color=color_map, node_size=30)
-    plt.show()
-
-    print(m.arcs)
-
-    nx.draw(m.get_cut_morse_graph(), pos=positions, node_color=color_map, node_size=30)
-    plt.show()
+    # positions = dict(list(zip(nx.nodes(m.msgraph), list(zip(nx.get_node_attributes(m.msgraph, "x").values(),
+    #                                                         nx.get_node_attributes(m.msgraph, "y").values())))))
+    # colors = ['b', 'g', 'r']
+    # color_map = list(map(lambda v: colors[v], nx.get_node_attributes(m.msgraph, "morse_index").values()))
+    #
+    # nx.draw(m.msgraph, pos=positions, node_color=color_map, node_size=30)
+    # plt.show()
+    #
+    # print(m.arcs)
+    #
+    # nx.draw(m.get_cut_morse_graph(), pos=positions, node_color=color_map, node_size=30)
+    # plt.show()
 
 
 # test3()

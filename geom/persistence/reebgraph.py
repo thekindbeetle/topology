@@ -162,9 +162,9 @@ class ReebGraph:
                 return [(i - 1, j), (i, j - 1), (i + 1, j)]
             else:
                 return [(i - 1, j), (i + 1, j), (i, j - 1), (i, j + 1)]
-                
-    def _is_edge_contractible(self, v1, v2):
-        g = self.reeb_graph_contracted
+    
+    @staticmethod
+    def _is_edge_contractible(g, v1, v2):
         idx1, idx2 = g.nodes[v1]['morse_index'], g.nodes[v2]['morse_index']
         
         # We cannot remove saddle-saddle pair;
@@ -422,19 +422,20 @@ class ReebGraph:
             fig.savefig(fname)
             plt.close()
 
-    def persistence_simplification(self, level):
+    @staticmethod
+    def persistence_simplification(g, level):
         """
         Persistence simplification of Reeb graph.
         :param level: level of simplification.
         """
         import heapq
         
-        g = self.reeb_graph_contracted
         edge_persistence = nx.get_edge_attributes(g, 'persistence')
         
         # Create Priority Queue of contractable edges.
         # Main principle: If edge was not contractible it will not be contractible.
-        heap = [(edge_persistence[e], e) for e in g.edges if self._is_edge_contractible(e[0], e[1])]
+        heap = [(edge_persistence[e], e) for e in g.edges
+                if ReebGraph._is_edge_contractible(g, e[0], e[1])]
 
         if not heap:  # If heap is empty, then there's nothing to simplify.
             return
@@ -447,10 +448,7 @@ class ReebGraph:
             # Some edges are already removed.
             # But we cannot remove edge DIRECTLY from heap (it's inefficient)
             if g.has_edge(*curr_edge):
-                if self._is_edge_contractible(*curr_edge):
-                    # plt.figure()
-                    # self.draw_reebgraph()
-                    # plt.show()
+                if ReebGraph._is_edge_contractible(g, curr_edge[0], curr_edge[1]):
                     if g.nodes[curr_edge[1]]['morse_index'] == 1:
                         # Remove maximum
                         g.remove_node(curr_edge[0])
@@ -472,7 +470,7 @@ class ReebGraph:
                         new_edge_persistence = g.nodes[next_neighbour]['value'] - g.nodes[prev_neighbour]['value']
                         g.add_edge(prev_neighbour, next_neighbour, persistence=new_edge_persistence)
                         
-                        if self._is_edge_contractible(prev_neighbour, next_neighbour):
+                        if ReebGraph._is_edge_contractible(g, prev_neighbour, next_neighbour):
                             heapq.heappush(heap, (new_edge_persistence, (prev_neighbour, next_neighbour)))
             if not heap:
                 return

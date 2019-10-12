@@ -6,11 +6,24 @@ from matplotlib import cm
 import warnings
 
 
+def test():
+    import morse.field_generator as gen
+    image = gen.gen_field_from_file(r"C:\repo\pproc\data\input.fits", conditions="plain", filetype="fits")
+    mesh = TorusMesh.build_all(image)
+    mesh.simplify_by_pairs_remained(40)
+    smth = LaplaceSmoother.create_from_mesh(mesh, interpolation="log")
+    smth.smooth(converge="steps", steps=1000)
+    smth.draw()
+
+
 class LaplaceSmoother:
     """
     Сглаживаем методом конечных разностей картинку с заданной маской.
     Значения маски фиксированы. Остальные на каждом шаге определяются как среднее между значениями в окрестности.
     """
+
+    EPS = 0.1
+
     def __init__(self, lx, ly):
         """
         Создать сглаживатель с указанием длины и ширины поля.
@@ -94,17 +107,17 @@ class LaplaceSmoother:
         # Восстанавливаем значения маскированных ячеек.
 
         new_field = np.zeros(self.field.shape)
-        new_field[:self.lx-1, :self.ly] += self.field[1:self.lx, :self.ly]
-        new_field[self.lx-1, :self.ly] += self.field[0, :self.ly]
+        new_field[:self.lx - 1, :self.ly] += self.field[1:self.lx, :self.ly]
+        new_field[self.lx - 1, :self.ly] += self.field[0, :self.ly]
 
-        new_field[:self.lx, :self.ly-1] += self.field[:self.lx, 1:self.ly]
-        new_field[:self.lx, self.ly-1] += self.field[:self.lx, 0]
+        new_field[:self.lx, :self.ly - 1] += self.field[:self.lx, 1:self.ly]
+        new_field[:self.lx, self.ly - 1] += self.field[:self.lx, 0]
 
-        new_field[1:self.lx, :self.ly] += self.field[:self.lx-1, :self.ly]
-        new_field[0, :self.ly] += self.field[self.lx-1, :self.ly]
+        new_field[1:self.lx, :self.ly] += self.field[:self.lx - 1, :self.ly]
+        new_field[0, :self.ly] += self.field[self.lx - 1, :self.ly]
 
-        new_field[:self.lx, 1:self.ly] += self.field[:self.lx, :self.ly-1]
-        new_field[:self.lx, 0] += self.field[:self.lx, self.ly-1]
+        new_field[:self.lx, 1:self.ly] += self.field[:self.lx, :self.ly - 1]
+        new_field[:self.lx, 0] += self.field[:self.lx, self.ly - 1]
 
         new_field *= 0.25
 
@@ -131,13 +144,18 @@ class LaplaceSmoother:
         plt.show()
 
     @staticmethod
-    def create_from_mesh(mesh, lx, ly, interpolation='linear'):
+    def create_from_mesh(mesh, interpolation='linear'):
         """
+        Build smoother from Morse-Smale complex.
+        1. Put values in critical points
+        2. Interpolate values on arcs, fix it.
+        3. By finite differences, compute field.
         :param interpolation:
             Interpolation method to set values on arcs.
             'linear', 'log'
         :type mesh: TorusMesh
         """
+        lx, ly = mesh.sizeX, mesh.sizeY
         arc_list = mesh.list_arcs()
         arc_list.sort(key=len)
         arc_values_list = []
@@ -156,11 +174,11 @@ class LaplaceSmoother:
                 else:
                     # Если в разном, то середину дуги считаем за 0 (с добавкой)
                     # и интерполируем две части дуги.
-                    eps = 0.1
-                    values = np.geomspace(start_val, eps * np.sign(start_val), num=len(arc) // 2)
+                    values = np.geomspace(start_val, LaplaceSmoother.EPS * np.sign(start_val), num=len(arc) // 2)
                     if len(arc) % 2 == 1:
                         values = np.append(values, [0.0])
-                    values = np.append(values,np.geomspace(eps * np.sign(end_val), end_val, num=len(arc) // 2))
+                    values = np.append(values,
+                                       np.geomspace(LaplaceSmoother.EPS * np.sign(end_val), end_val, num=len(arc) // 2))
 
             arc_values_list.append(values)
 
@@ -168,7 +186,7 @@ class LaplaceSmoother:
         a = LaplaceSmoother(lx, ly)
         for arc, arc_val in zip(arc_list, arc_values_list):
             for idx in range(len(arc)):
-                x, y = int(mesh._coords(arc[idx])[1]), int(mesh._coords(arc[idx])[0])
+                x, y = int(mesh.coords(arc[idx])[1]), int(mesh.coords(arc[idx])[0])
                 a.set_val(x, y, arc_val[idx])
                 a.set_mask(x, y)
         return a
