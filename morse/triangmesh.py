@@ -6,6 +6,23 @@ import functools
 
 CONDITIONS = ('torus', 'plain', 'cylinder_x', 'cylinder_y')
 
+def test():
+    import morse.field_generator as gen
+    import time
+    image1 = gen.gen_field_from_file(r"C:\repo\pproc\data\input.fits", conditions="plain", filetype="fits")
+    image2 = gen.gen_field_from_file(r"C:\repo\pproc\data\input_2.fits", conditions="plain", filetype="fits")
+    image1 = gen.resize(image1, multipliers=(3, 3))
+    image2 = gen.resize(image2, multipliers=(3, 3))
+    gen.perturb(image1)
+    gen.perturb(image2)
+
+    t_start = time.time()
+    mesh = TriangMesh.build_all(image1, image2)
+    t_finish = time.time()
+    print(t_finish - t_start)
+
+    mesh.draw()
+
 
 class TriangMesh:
     """
@@ -379,6 +396,7 @@ class TriangMesh:
         tr_mesh.cmp_jacobi_set()
         return tr_mesh
 
+test()
 # field = np.zeros((3, 4))
 # t = TriangMesh(3, 4, conditions='cylinder_y')
 # t.set_field(field)

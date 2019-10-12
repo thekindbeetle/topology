@@ -22,7 +22,7 @@ class LaplaceSmoother:
     Значения маски фиксированы. Остальные на каждом шаге определяются как среднее между значениями в окрестности.
     """
 
-    EPS = 0.1
+    EPS_LOG = 0.1
 
     def __init__(self, lx, ly):
         """
@@ -174,11 +174,11 @@ class LaplaceSmoother:
                 else:
                     # Если в разном, то середину дуги считаем за 0 (с добавкой)
                     # и интерполируем две части дуги.
-                    values = np.geomspace(start_val, LaplaceSmoother.EPS * np.sign(start_val), num=len(arc) // 2)
+                    values = np.geomspace(start_val, LaplaceSmoother.EPS_LOG * np.sign(start_val), num=len(arc) // 2)
                     if len(arc) % 2 == 1:
                         values = np.append(values, [0.0])
                     values = np.append(values,
-                                       np.geomspace(LaplaceSmoother.EPS * np.sign(end_val), end_val, num=len(arc) // 2))
+                                       np.geomspace(LaplaceSmoother.EPS_LOG * np.sign(end_val), end_val, num=len(arc) // 2))
 
             arc_values_list.append(values)
 
