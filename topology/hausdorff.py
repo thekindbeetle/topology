@@ -1,24 +1,24 @@
-import scipy.misc
 import numpy as np
 
-def fractal_dimension(Z, threshold=0.5):
+
+def fractal_dimension(im, threshold=0.5):
     """
     Фрактальная размерность изображения.
     """
     # Only for 2d image
-    assert(len(Z.shape) == 2)
+    assert(len(im.shape) == 2)
 
-    def boxcount(Z, k):
-        S = np.add.reduceat(
+    def box_count(Z, k):
+        s = np.add.reduceat(
             np.add.reduceat(Z, np.arange(0, Z.shape[0], k), axis=0),
                                np.arange(0, Z.shape[1], k), axis=1)
-        return np.count_nonzero(S)
+        return np.count_nonzero(s)
 
     # Transform Z into a binary array
-    Z = (Z > threshold)
+    im = (im > threshold)
 
     # Minimal dimension of image
-    p = min(Z.shape)
+    p = min(im.shape)
 
     # Greatest power of 2 less than or equal to p
     n = 2**np.floor(np.log(p)/np.log(2))
@@ -32,8 +32,8 @@ def fractal_dimension(Z, threshold=0.5):
     # Actual box counting with decreasing size
     counts = []
     for size in sizes:
-        counts.append(boxcount(Z, size))
+        counts.append(box_count(im, size))
 
     # Fit 
-    coeffs = np.polyfit(np.log(sizes), np.log(counts), 1)
-    return -coeffs[0]
+    coefficients = np.polyfit(np.log(sizes), np.log(counts), 1)
+    return -coefficients[0]

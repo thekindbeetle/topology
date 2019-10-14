@@ -12,7 +12,7 @@ class ReanalysisImporter:
 
     def __init__(self, data_folder='D:/data/air_temperature'):
         """
-        :param data_file: Папка с наборами данных в формате NetCDF4
+        :param data_folder: Папка с наборами данных в формате NetCDF4
         :return:
         """
         self.dset = netCDF4.Dataset(os.path.join(data_folder, 'air.mon.mean.nc'), "r", format="NETCDF4")

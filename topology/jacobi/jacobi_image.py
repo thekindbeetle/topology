@@ -6,9 +6,20 @@ import morse.trianglemesh
 from copy import copy
 
 
+def test():
+    import morse.field_generator as gen
+    import matplotlib.pyplot as plt
+
+    field1 = gen.gen_field_from_file(r"C:\repo\pproc\data\input.fits", conditions="plain", filetype="fits")
+    field2 = gen.gen_field_from_file(r"C:\repo\pproc\data\input2.fits", conditions="plain", filetype="fits")
+
+    jac = binary_jacobi_set(field1, field2)
+    plt.matshow(jac, cmap='Grays')
+
+
 def binary_jacobi_set(field1, field2, threshold=0.7):
     """
-    Приближённое вычисление множества Якоби
+    Приближённое вычисление множества Якоби (как бинарное изображение).
     :param field1: Первое поле.
     :param field2: Второе поле.
     :param threshold: Порог бинаризации изображения. Подбирается вручную в зависимости от данных.
@@ -118,3 +129,6 @@ def get_persistence_map(jacobi_field, src_field):
         for idx in indexes:
             result[idx[0], idx[1]] = pers
     return result
+
+
+test()

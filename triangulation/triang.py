@@ -1,5 +1,5 @@
 import math
-import geom.util
+import triangulation.util
 
 
 class Triang:
@@ -7,10 +7,10 @@ class Triang:
     v1 = None
     v2 = None
 
-    # Appearance time of triangle:
+    # Appearance time of triangulation:
     # for oxygon - circumscribed circle;
-    # for obtuse triangle - half largest side;
-    # for out - maximum appearance time of triangle + 1
+    # for obtuse triangulation - half largest side;
+    # for out - maximum appearance time of triangulation + 1
     appTime = None
 
     # Global index, depends on dimension:
@@ -47,7 +47,7 @@ class Triang:
 
     def outer_radius(self, vertices):
         tr = self.get_triang(vertices)
-        return geom.util.outer_radius(tr[0], tr[1], tr[2])
+        return triangle.util.outer_radius(tr[0], tr[1], tr[2])
 
     def v(self, idx):
         """

@@ -1,5 +1,20 @@
 import math
-import geom.util
+import triangulation.util
+
+
+def test():
+    a1 = 8
+    b1 = 7
+    a2 = 3
+    b2 = 6
+    e1 = Edge( 1, a1, b1 )
+    e2 = Edge( 2, a2, b2 )
+    print(e1)
+    print(e2)
+    print(e1.equals_by_global_idx(e1))
+    print(e1.equals_by_global_idx(e2))
+    print(e1.compare_to(e1))
+    print(e1.compare_to(e2))
 
 
 class Edge:
@@ -60,16 +75,5 @@ class Edge:
         """
         return math.copysign(1, self.appTime - simplex.appTime)
 
-def test():
-    a1 = 8
-    b1 = 7
-    a2 = 3
-    b2 = 6
-    e1 = Edge( 1, a1, b1 )
-    e2 = Edge( 2, a2, b2 )
-    print(e1)
-    print(e2)
-    print(e1.equals_by_global_idx(e1))
-    print(e1.equals_by_global_idx(e2))
-    print(e1.compare_to(e1))
-    print(e1.compare_to(e2))
+
+test()

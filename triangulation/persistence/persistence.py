@@ -1,5 +1,25 @@
-import geom.vert
-import geom.persistence.filtration
+from triangulation.persistence.filtration import Filtration
+
+
+def test():
+    import matplotlib.pyplot as plt
+    import numpy as np
+
+    points = [
+        [1.0, 1.0],
+        [2.0, 1.0],
+        [2.0, 2.0],
+        [5.0, 7.0],
+        [9.0, 11.0],
+        [10.0, 11.0],
+        [-1.0, 8.0]
+    ]
+    plt.plot(*np.transpose(points), 'ok')
+    f = Filtration.from_points(np.transpose(points)[0], np.transpose(points)[1])
+    f.print()
+    pers = Persistence(f)
+    print(pers._compBirthTimes)
+    print(pers._compDeathTimes)
 
 
 class Persistence:
@@ -12,9 +32,6 @@ class Persistence:
 
     # Components at all levels.
     comp_num = None
-
-    # Big components at all levels.
-    # numOfBigComponents = None
 
     # Здесь хранятся индексы компонент связности
     _parentOfSimplex = None
@@ -48,14 +65,13 @@ class Persistence:
         simp_num = filtration.simplexes_num()
 
         self.comp_num = [0 for i in range(simp_num)]
-        # self.numOfBigComponents = [0 for i in range(simp_num)]
         self.numOfCycles = [0 for i in range(simp_num)]
         self._parentOfSimplex = []
         self._compBirthTimes = []
         self._compDeathTimes = []
 
-        self.init_cycles_data()     # инициализация данных о циклах
-        self.init_components_data() # инициализация данных о компонентах связности
+        self.init_cycles_data()  # инициализация данных о циклах
+        self.init_components_data()  # инициализация данных о компонентах связности
 
     def get_diagram(self):
         """
@@ -84,9 +100,6 @@ class Persistence:
         min_parent = min(parent_i, parent_j)
         max_parent = max(parent_i, parent_j)
         self._parentOfSimplex[min_parent] = max_parent
-        # for k in range(len(self._parentOfSimplex)):
-        #     if self._parentOfSimplex[k] == min_parent:
-        #         self._parentOfSimplex[k] = max_parent
 
     def find(self, i):
         """
@@ -209,26 +222,6 @@ class Persistence:
                     self._compDeathTimes[min_idx] = self.filtration.get_simplex(filt_idx).appTime
                     curr_comp_num -= 1  # Число компонент связности уменьшилось на 1
             self.comp_num[filt_idx] = curr_comp_num
-            self.numOfBigComponents[filt_idx] = curr_big_comp_num
 
-def test():
-    import matplotlib.pyplot as plt
-    import numpy as np
-
-    points = [
-        [1.0, 1.0],
-        [2.0, 1.0],
-        [2.0, 2.0],
-        [5.0, 7.0],
-        [9.0, 11.0],
-        [10.0, 11.0],
-        [-1.0, 8.0]
-    ]
-    plt.plot(*np.transpose(points), 'ok')
-    f = geom.persistence.filtration.Filtration.from_points(*np.transpose(points)[0], *np.transpose(points))
-    f.print()
-    pers = Persistence(f)
-    print(pers._compBirthTimes)
-    print(pers._compDeathTimes)
 
 test()

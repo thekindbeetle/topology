@@ -1,6 +1,6 @@
 import matplotlib.pyplot as plt
 import matplotlib.colors as colors
-plt.style.use("ggplot")
+
 import numpy as np
 import os
 
@@ -14,6 +14,8 @@ from sunpy.net import hek, attrs as a
 from sunpy.coordinates import frames
 from sunpy.database import Database
 
+plt.style.use("ggplot")
+
 # 2010/02/10 is the start time of SDO (with HMI device).
 START_TIME_HMI = datetime(2010, 2, 10, 0)
 
@@ -26,7 +28,7 @@ def _get_coords_arcsec(coord1, coord2, obstime):
     :param obstime:
     :return:
     """
-    src_coord = SkyCoord(coord1*u.deg, coord2*u.deg, frame=frames.HeliographicStonyhurst, obstime=obstime)
+    src_coord = SkyCoord(coord1 * u.deg, coord2 * u.deg, frame=frames.HeliographicStonyhurst, obstime=obstime)
     result_coord = src_coord.transform_to(frames.Helioprojective)
     return result_coord.Tx.value, result_coord.Ty.value
 
@@ -56,7 +58,8 @@ def download_ar_hmi_data(ar_number, period=3600, database_path='D:/fits', half_i
 
     client = hek.HEKClient()
 
-    result = client.search(hek.attrs.Time(START_TIME_HMI, datetime.now()), hek.attrs.OBS.Observatory=='SDO', hek.attrs.AR.NOAANum == ar_number)
+    result = client.search(hek.attrs.Time(START_TIME_HMI, datetime.now()), hek.attrs.OBS.Observatory == 'SDO',
+                           hek.attrs.AR.NOAANum == ar_number)
     result = [e for e in result if e['search_instrument'] == 'HMI']
 
     print('{num} events in AR {ar} found'.format(num=len(result), ar=ar_number))
@@ -71,9 +74,9 @@ def download_ar_hmi_data(ar_number, period=3600, database_path='D:/fits', half_i
     for event in result:
         start_time = datetime.strptime(event['event_starttime'], '%Y-%m-%dT%H:%M:%S')
         end_time = datetime.strptime(event['event_endtime'], '%Y-%m-%dT%H:%M:%S')
-        query = a.Time(start_time, end_time) &\
-                a.Instrument('HMI') &\
-                a.vso.Provider('JSOC') &\
+        query = a.Time(start_time, end_time) & \
+                a.Instrument('HMI') & \
+                a.vso.Provider('JSOC') & \
                 a.vso.Physobs('LOS_magnetic_field')
         database.fetch(query & a.vso.Sample(period * u.s), path="./data")
         database.commit()
@@ -104,7 +107,7 @@ def download_ar_hmi_data(ar_number, period=3600, database_path='D:/fits', half_i
         except TypeError:
             print('File {f} is corrupted'.format(f=fname))
             continue
-        
+
         # Переводим координаты в гелиопроективные
         center_point = _get_coords_arcsec(centers_x_fit[file_num], centers_y[file_num], mp.date)
 
@@ -123,7 +126,7 @@ def download_ar_hmi_data(ar_number, period=3600, database_path='D:/fits', half_i
 
         # save_path = './processed/AR{ar_number}/{fnum}.fits'.format(ar_number=ar_number,fnum=file_num)
         short_name = os.path.basename(fname)
-        save_path = 'C:/data/hmi/processed/AR{ar_number}/{fname}'.format(ar_number=ar_number,fname=short_name)
+        save_path = 'C:/data/hmi/processed/AR{ar_number}/{fname}'.format(ar_number=ar_number, fname=short_name)
 
         if os.path.exists(save_path):
             os.remove(save_path)

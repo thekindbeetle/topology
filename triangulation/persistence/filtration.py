@@ -1,11 +1,11 @@
 import math
 import numpy as np
-import geom.util
 import matplotlib.pyplot as plt
 import matplotlib.collections as mc
-import geom.vert
-import geom.edge
-import geom.triang
+import triangulation.util
+import triangulation.vert
+import triangulation.edge
+import triangulation.triang
 import triangle
 from operator import attrgetter
 
@@ -91,14 +91,14 @@ class Filtration:
         f.vertNum = len(x)
 
         # Индексирование вершин, рёбер и треугольников
-        f.vertices = [geom.vert.Vert(idx, x[idx], y[idx]) for idx in range(f.vertNum)]
+        f.vertices = [triangulation.vert.Vert(idx, x[idx], y[idx]) for idx in range(f.vertNum)]
         f.incidEdgesToVertices = [[] for i in range(f.vertNum)]
         f.incidTrianglesToVertices = [[] for i in range(f.vertNum)]
 
         tr = triangle.delaunay(np.transpose([x, y]))
         f.trNum = len(tr)
 
-        f.triangles = [geom.triang.Triang(idx, tr[idx][0], tr[idx][1], tr[idx][2]) for idx in range(f.trNum)]
+        f.triangles = [triangulation.triang.Triang(idx, tr[idx][0], tr[idx][1], tr[idx][2]) for idx in range(f.trNum)]
         f.incidEdgesToTriangles = [[] for i in range(f.trNum)]
 
         # Индексируем рёбра для быстрого поиска
@@ -110,17 +110,17 @@ class Filtration:
         for triIdx in range(f.trNum):
             tr = f.triangles[triIdx]
             if not edges_idx.get((tr.v(0), tr.v(1))):
-                f.edges.append(geom.edge.Edge(idx, tr.v(0), tr.v(1)))
+                f.edges.append(triangulation.edge.Edge(idx, tr.v(0), tr.v(1)))
                 edges_idx[(tr.v(0), tr.v(1))] = True
                 edges_idx[(tr.v(1), tr.v(0))] = True
                 idx += 1
             if not edges_idx.get((tr.v(0), tr.v(2))):
-                f.edges.append(geom.edge.Edge(idx, tr.v(0), tr.v(2)))
+                f.edges.append(triangulation.edge.Edge(idx, tr.v(0), tr.v(2)))
                 edges_idx[(tr.v(0), tr.v(2))] = True
                 edges_idx[(tr.v(2), tr.v(0))] = True
                 idx += 1
             if not edges_idx.get((tr.v(1), tr.v(2))):
-                f.edges.append(geom.edge.Edge(idx, tr.v(1), tr.v(2)))
+                f.edges.append(triangulation.edge.Edge(idx, tr.v(1), tr.v(2)))
                 edges_idx[(tr.v(1), tr.v(2))] = True
                 edges_idx[(tr.v(2), tr.v(1))] = True
                 idx += 1
@@ -199,7 +199,7 @@ class Filtration:
 
         # Add outer face to the triangulation
         outIdx = f.trNum
-        out = geom.triang.Out(outIdx, f.boardVertices)
+        out = triangulation.triang.Out(outIdx, f.boardVertices)
         f.triangles.append(out)
         f.incidEdgesToTriangles.append(f.boardEdges)
 
@@ -226,18 +226,18 @@ class Filtration:
             if s.dim == 0:
                 s.appTime = 0
             elif s.dim == 1:
-                length = geom.util.dist(f.vertices[s.v(0)], f.vertices[s.v(1)])
+                length = triangulation.util.dist(f.vertices[s.v(0)], f.vertices[s.v(1)])
                 s.appTime = length / 2
             elif s.dim == 2:
-                len_a = geom.util.dist(f.vertices[s.v(0)], f.vertices[s.v(1)])
-                len_b = geom.util.dist(f.vertices[s.v(0)], f.vertices[s.v(2)])
-                len_c = geom.util.dist(f.vertices[s.v(1)], f.vertices[s.v(2)])
-                if geom.util.is_obtuse(len_a, len_b, len_c):
+                len_a = triangulation.util.dist(f.vertices[s.v(0)], f.vertices[s.v(1)])
+                len_b = triangulation.util.dist(f.vertices[s.v(0)], f.vertices[s.v(2)])
+                len_c = triangulation.util.dist(f.vertices[s.v(1)], f.vertices[s.v(2)])
+                if triangulation.util.is_obtuse(len_a, len_b, len_c):
                     s.appTime = max([len_a, len_b, len_c]) / 2
                 else:
-                    s.appTime = geom.util.outer_radius(f.vertices[s.v(0)],
-                                                       f.vertices[s.v(1)],
-                                                       f.vertices[s.v(2)])
+                    s.appTime = triangulation.util.outer_radius(f.vertices[s.v(0)],
+                                                           f.vertices[s.v(1)],
+                                                           f.vertices[s.v(2)])
         f.simplexes[-1].appTime = max([f.triangles[i].appTime for i in range(f.trNum - 1)]) + 1
 
         # Сортировка списка симплексов по времени появления
@@ -269,23 +269,23 @@ class Filtration:
 
         for i in range(lx):
             for j in range(ly):
-                v = geom.vert.Vert(ly * i + j, i, j)
+                v = triangulation.vert.Vert(ly * i + j, i, j)
                 v.appTime = values[i, j]
                 f.vertices.append(v)
                 # Горизонтальные рёбра
                 if j != 0:
-                    e = geom.edge.Edge(v.globInd - i, v.globInd - 1, v.globInd)
+                    e = triangulation.edge.Edge(v.globInd - i, v.globInd - 1, v.globInd)
                     e.appTime = max(f.vertices[v.globInd - 1].appTime, v.appTime)
                     f.edges.append(e)
                 # Вертикальные рёбра
                 if i != 0:
-                    e = geom.edge.Edge(horizEdgeNum + v.globInd - ly, v.globInd - ly, v.globInd)
+                    e = triangulation.edge.Edge(horizEdgeNum + v.globInd - ly, v.globInd - ly, v.globInd)
                     e.appTime = max(f.vertices[v.globInd - ly].appTime, v.appTime)
                     f.edges.append(e)
                 # Диагональные рёбра
                 if i != 0 and j != 0:
-                    e = geom.edge.Edge(horizEdgeNum + verticalEdgeNum + v.globInd - ly - i,
-                                       v.globInd - ly - 1, v.globInd)
+                    e = triangulation.edge.Edge(horizEdgeNum + verticalEdgeNum + v.globInd - ly - i,
+                                           v.globInd - ly - 1, v.globInd)
                     e.appTime = max(f.vertices[v.globInd - ly - 1].appTime, v.appTime)
                     f.edges.append(e)
 
@@ -294,7 +294,7 @@ class Filtration:
         # Правые треугольники
         for i in range(lx - 1):
             for j in range(ly - 1):
-                t = geom.triang.Triang(trCounter, ly * i + j, ly * i + j + 1, ly * (i + 1) + j + 1)
+                t = triangulation.triang.Triang(trCounter, ly * i + j, ly * i + j + 1, ly * (i + 1) + j + 1)
                 t.appTime = max(f.vertices[ly * i + j].appTime,
                                 f.vertices[ly * i + j + 1].appTime,
                                 f.vertices[ly * (i + 1) + j + 1].appTime)
@@ -304,7 +304,7 @@ class Filtration:
         # Левые треугольники
         for i in range(lx - 1):
             for j in range(ly - 1):
-                t = geom.triang.Triang(trCounter, ly * i + j, ly * (i + 1) + j, ly * (i + 1) + j + 1)
+                t = triangulation.triang.Triang(trCounter, ly * i + j, ly * (i + 1) + j, ly * (i + 1) + j + 1)
                 t.appTime = max(f.vertices[ly * i + j].appTime,
                                 f.vertices[ly * (i + 1) + j].appTime,
                                 f.vertices[ly * (i + 1) + j + 1].appTime)

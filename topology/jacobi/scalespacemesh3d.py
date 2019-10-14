@@ -9,8 +9,7 @@ import time
 
 def test():
     # Возьмём исходное изображение на слое z = 0
-    image = gen.gen_field_from_file(r'C:\data\hmi\processed\AR12673\hmi_m_45s_2017_09_06_10_01_30_tai_magnetogram.fits',
-                                    conditions='plain', filetype='fits')
+    image = gen.gen_field_from_file(r"C:\repo\pproc\data\input.fits", conditions="plain", filetype="fits")
     image = image[100:200]
     j = ScaleSpaceMesh3D(image, level_num=50)
     j.calc_scale_space_set(start_level=6)
@@ -362,7 +361,9 @@ class ScaleSpaceMesh3D:
         for edge_type in self.EDGE_TYPES:
             self._draw_edge_set(ax, self.jacobi_set[edge_type])
 
+
 if __name__ == '__main__':
+# if False:
     import argparse
     import networkx as nx
     import scipy.interpolate as sip
@@ -507,4 +508,3 @@ if __name__ == '__main__':
     # print("Wait for rendering...")
     # time.sleep(30)
     # vv.screenshot(args.output, ob=ax)
-

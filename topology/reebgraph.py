@@ -11,11 +11,27 @@ pygraphviz_spec = importlib.util.find_spec("pygraphviz")
 found_pygraphviz = pygraphviz_spec is not None
 
 
+def test():
+    import morse.field_generator
+    im = morse.field_generator.gen_field_from_file('C:/repo/pproc/data/input.fits', filetype='fits', conditions='plain')
+    r = ReebGraph.build_all(im)
+    ReebGraph.persistence_simplification(r.reeb_graph_contracted, level=1000)
+
+    print(len(r.reeb_graph_contracted.nodes))
+    plt.figure()
+    r.draw_reebgraph()
+    plt.show()
+
+
 class ReebGraph:
     """
     Reeb Graph computation for data on quad mesh on the plane.
     We will compute Reeb Graph on ordered extended data,
     but simplify on initial data.
+    Based on
+        Carr, H., Snoeyink, J., & Axen, U. (2003).
+        Computing contour trees in all dimensions.
+        Computational Geometry, 24(2), 75–94.
     """
 
     def __init__(self, initial_data):
@@ -495,37 +511,5 @@ class ReebGraph:
         r.set_persistence()
         return r
 
-
-def test():
-    import morse.field_generator
-    # data = np.array([
-    #     [1.0, 2.0, 1.5],
-    #     [2.5, 5.0, 1.6],
-    #     [1.2, 2.2, 1.7],
-    #     [2.5, 5.0, 1.6],
-    #     [1.0, 2.0, 1.5]
-    # ])
-    # data = morse.field_generator.\
-    #     gen_gaussian_sum_rectangle(50, 50, [(10, 10), (15, 15), (10, 15), (20, 5)], 3)
-    # data = morse.field_generator.perturb(data)
-    im = morse.field_generator.gen_field_from_file('C:/data/test.fits', filetype='fits', conditions='plain')
-    r = ReebGraph.build_all(im)
-    # print(nx.get_node_attributes(r.reeb_graph_contracted, 'value'))
-    # print(nx.get_edge_attributes(r.reeb_graph_contracted, 'persistence'))
-
-    r.persistence_simplification(1000)
-
-    print(len(r.reeb_graph_contracted.nodes))
-    plt.figure()
-    r.draw_reebgraph()
-    plt.show()
-
-    # data = morse.field_generator.gen_sincos_field(200, 200, 0.3, 0.2)
-    # data = morse.field_generator.gen_field_from_file("C:/data/test.bmp", conditions='plain')
-    # data = morse.field_generator.gen_field_from_file(
-    #     "C:/data/hmi/processed/AR12673/hmi_m_45s_2017_09_06_07_24_45_tai_magnetogram.fits",
-    #     filetype='fits',
-    #     conditions='plain')
-    #
 
 # test()
