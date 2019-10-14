@@ -4,7 +4,7 @@ from scipy import integrate
 from scipy.interpolate import interp1d
 import matplotlib.pyplot as plt
 
-from generators import poisson
+from point_process import poisson
 from triangulation.persistence.persistence import Persistence
 from triangulation.persistence.filtration import Filtration
 

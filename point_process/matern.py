@@ -1,6 +1,6 @@
 import scipy.stats
 import numpy as np
-import generators.poisson
+import point_process.poisson
 import matplotlib.pyplot as plt
 
 
@@ -34,7 +34,7 @@ def matern_point_process(kappa, r, mu, dx, include_parents=False, logging_on=Tru
     """
     # create a set of parent points from a Poisson( kappa )
     # distribution on the square region [0,Dx] X [0,Dx]
-    parents = generators.poisson.poisson_homogeneous_point_process(kappa, dx)
+    parents = point_process.poisson.poisson_homogeneous_point_process(kappa, dx)
 
     # M is the number of parents
     m = parents.shape[0]

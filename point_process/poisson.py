@@ -1,5 +1,4 @@
 from scipy.stats import *
-import numpy as np
 
 
 def poisson_homogeneous_point_process(rate, dx, dy=None, log=False, fixed_rate=False):

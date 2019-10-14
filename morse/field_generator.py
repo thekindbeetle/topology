@@ -2,7 +2,6 @@ import copy
 import numpy as np
 import numpy.random
 import scipy.stats
-import astropy.io.fits as fits
 from PIL import Image
 from scipy.ndimage.filters import gaussian_filter
 

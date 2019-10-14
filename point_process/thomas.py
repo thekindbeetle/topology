@@ -1,4 +1,4 @@
-import generators.poisson
+import point_process.poisson
 import scipy.stats
 import numpy as np
 
@@ -16,7 +16,7 @@ def thomas_point_process(kappa, sigma, mu, dx):
     """
     # create a set of parent points from a Poisson( kappa )
     # distribution on the square region [0,Dx] X [0,Dx]
-    parents = generators.poisson.poisson_homogeneous_point_process(kappa, dx)
+    parents = point_process.poisson.poisson_homogeneous_point_process(kappa, dx)
 
     # M is the number of parents
     m = parents.shape[0]
