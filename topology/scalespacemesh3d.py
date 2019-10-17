@@ -4,7 +4,6 @@ import skimage.filters
 import matplotlib.pyplot as plt
 import mpl_toolkits.mplot3d as plot3d
 import threading
-import time
 
 
 def test():
@@ -367,6 +366,8 @@ if __name__ == '__main__':
     import argparse
     import networkx as nx
     import scipy.interpolate as sip
+    from morse.torusmesh import TorusMesh
+
     # Эта штука нужна, чтобы рисовать в 3D с картинкой на фоне.
     import visvis as vv
     from visvis.utils.pypoints import Pointset
@@ -378,17 +379,28 @@ if __name__ == '__main__':
     parser.add_argument('--input', metavar='i', type=str, help='input FITS file')
     parser.add_argument('--output', metavar='o', type=str, help='output PNG file')
     parser.add_argument('--levels', metavar='l', type=int, default=50, help='number of levels', required=False)
+    parser.add_argument('--start_level', type=int, default=6, help='start level', required=False)
     parser.add_argument('--parallel', metavar='p', type=int, default=True, help='parallel computation', required=False)
+    parser.add_argument('--morse', metavar='p', type=int, default=True, help='draw Morse graph', required=False)
     args = parser.parse_args()
 
     image = gen.gen_field_from_file(args.input, conditions='plain', filetype='fits')
+    # image = image[100:300, 100:300]
+
+    start_level = args.start_level
+
     j = ScaleSpaceMesh3D(image, level_num=args.levels)
+
+    # Строим комплекс Морса для некоторого уровня
+    mesh = TorusMesh.build_all(j.f[:, :, start_level])
+    mesh.simplify_by_level(0.01)
+
     if args.parallel:
         print('Parallel computation started...')
-        j.calc_scale_space_set_parallel(start_level=6)
+        j.calc_scale_space_set_parallel(start_level=start_level)
     else:
         print('Computation started...')
-        j.calc_scale_space_set(start_level=6)
+        j.calc_scale_space_set(start_level=start_level)
 
     print("Jacobi graph constructing...")
     edges, nodes = [], []
@@ -474,12 +486,12 @@ if __name__ == '__main__':
 
         #     line = vv.solidLine(pp, radius, 8, axes=ax)
         #     line = vv.line(pp, radius, 8, axes=ax)
-        vv.plot(pp, lw=3, lc=color, alpha=0.5, ls='-')
+        vv.plot(pp, lw=3, lc=color, alpha=1, ls='-')
 
     def draw_top_points(ax, paths, color=(1, 1, 0)):
         top_pts = np.array([path_top_point(p) for p in paths])
         pp = Pointset(top_pts)
-        vv.plot(pp, ms='.', mc=color, mw='30', ls='', mew=0, axes=ax)
+        vv.plot(pp, ms='.', mc=color, mw='10', ls='', mew=0, axes=ax)
 
     def plot_bg_image(imgdata, level):
         nr, nc = imgdata.shape[:2]
@@ -487,20 +499,39 @@ if __name__ == '__main__':
         z = np.ones((nr, nc))
         vv.functions.surf(x, y, z * level, imgdata, aa=3)
 
+    def draw_critical_points(ax, morse_index, level, color):
+        Y, X = mesh.get_critical_points(morse_index)
+        Z = np.ones(len(X)) * level
+        pp = Pointset(np.transpose([X, Y, Z]))
+        vv.plot(pp, ms='.', mc=color, mw='12', ls='', mew=0, axes=ax)
+
+    def draw_arcs(ax, color=(1, 1, 0)):
+        arcs = mesh.get_arcs()
+        for arc in arcs:
+            Y, X = np.transpose(arc)
+            Z = np.ones(len(X)) * (start_level + 0.1)
+            pp = Pointset(np.transpose([X, Y, Z]))
+            vv.plot(pp, lw=1, lc=color, alpha=0.5, ls='-', mew=0, axes=ax)
+
     # Рисуем картинки
     z_multiplier = 4  # Увеличиваем масштаб по Z
-    plot_bg_image(image, level=6)
+    plot_bg_image(image, level=start_level)
     ax = vv.gca()
     ax.bgcolor = (0.7, 0.7, 0.7)
     ax.light0.position = (200, 200, 200, 0)
+    draw_arcs(ax, color=(0.5, 0.5, 0))
     for path in long_normal_paths:
         if len(path) <= 3:
             # Для кубического сплайна нужно 4 точки.
             continue
         draw_smoothed_path(ax, path, radius=2, color=(1, 1, 1))
+    draw_critical_points(ax, 2, level=(start_level + 0.1), color=(1, 0, 0))
+    draw_critical_points(ax, 1, level=(start_level + 0.1), color=(0, 0.5, 0))
+    draw_critical_points(ax, 0, level=(start_level + 0.1), color=(0, 0, 1))
     draw_top_points(ax, long_normal_paths)
-    ax.camera.azimuth = 45.
-    ax.camera.elevation = 20.
+
+    ax.camera.azimuth = 0.
+    ax.camera.elevation = 90.
     ax.camera.daspect = (1, 1, z_multiplier)
     vv.gcf().relativeFontSize = 2.0
 
