@@ -62,8 +62,26 @@ class ScaleSpaceMesh3D:
                        ('111000', 0), ('111001', 0), ('111010', 1), ('111011', 0),
                        ('111100', 0), ('111101', 0), ('111110', 0), ('111111', 1)])
 
-    def __init__(self, data, level_num):
+    def __init__(self, data, level_num, max_level, level_scale='log'):
+        """
+        Discrete Scale Space representation of image.
+        Critical paths and top points calculated as edges of the discrete Jacobi set.
+        :param data: 2D image.
+        :param level_num: level number.
+        :param level_scale: scale ('log' for logarithmic, 'linear' for linear scale).
+        """
         self.sizeX, self.sizeY = data.shape
+
+        if level_scale == 'log':
+            self.levels = np.logspace(start=0, stop=np.log10(max_level), num=level_num)
+        elif level_scale == 'linear':
+            self.levels = np.linspace(start=1, stop=max_level, num=level_num)
+        else:
+            raise AssertionError(level_scale)
+
+        print(self.levels)
+        self.start_level = 0  # Уровень, с которого вычисляется множество Якоби.
+        self.start_level_value = 0   #Уровень в виде реальной высоты (а не индекса в массиве).
 
         # Количество уровней
         self.sizeZ = level_num
@@ -71,11 +89,11 @@ class ScaleSpaceMesh3D:
         self.f[:, :, 0] = data
 
         # Данные на уровне определяются свёрткой с Гауссовским ядром
-        for level in range(1, level_num):
-            self.f[:, :, level] = skimage.filters.gaussian(data, sigma=level)
+        for i in range(1, level_num):
+            self.f[:, :, i] = skimage.filters.gaussian(data, sigma=self.levels[i])
         self.g = np.ones((self.sizeX, self.sizeY, self.sizeZ))
         for i in range(self.sizeZ):
-            self.g[:, :, i] = i
+            self.g[:, :, i] = self.levels[i]
         self.jacobi_set = dict()
 
     def _link_Zm(self, x, y, z):
@@ -236,12 +254,24 @@ class ScaleSpaceMesh3D:
 
         return self.LINK_4_TYPES[lower_link_type] if link_size == 4 else self.LINK_6_TYPES[lower_link_type]
 
-    def calc_scale_space_set(self, start_level=3):
+    def calc_scale_space_set(self, start_level_value=3):
         """
         Считаем множество Якоби, не включая граничные рёбра (чтобы не усложнять вычисление линка)
-        :param start_level: Уровень, начиная с которого вычисляется множество Якоби (минимум - 0).
+        :param start_level_value: Уровень, начиная с которого вычисляется множество Якоби (минимум - 0).
         :return:
         """
+        # Переводим start_level в индекс.
+        # Начинаем считать с места, где уровень выше указанного в start_level_value
+        self.start_level = self.sizeZ
+        for level in range(1, self.sizeZ):
+            if self.levels[level] > start_level_value:
+                self.start_level = level
+                break
+
+        self.start_level_value = self.levels[self.start_level]
+        print("Actual start level = {0}".format(self.start_level_value))
+        print("Start level index = {0}".format(self.start_level))
+
         self.jacobi_set = dict()
         for edge_type in ScaleSpaceMesh3D.EDGE_TYPES:
             self.jacobi_set[edge_type] = []
@@ -249,7 +279,7 @@ class ScaleSpaceMesh3D:
         for i in range(1, self.sizeX - 1):
             print('\u25A0', end='')
             for j in range(1, self.sizeY - 1):
-                for k in range(start_level, self.sizeZ - 1):
+                for k in range(self.start_level, self.sizeZ - 1):
                     # Прямые рёбра выходят из всех вершин.
                     # Горизонтальные рёбра в множество не входят.
                     for edge_type in ['Zz', 'Xx', 'Yy']:
@@ -261,7 +291,7 @@ class ScaleSpaceMesh3D:
                             if self._get_edge_criticality(i, j, k, edge_type) > 0:
                                 self.jacobi_set[edge_type].append([(i, j, k), self._get_edge_end(i, j, k, edge_type)])
 
-    def calc_scale_space_set_parallel(self, start_level=3):
+    def calc_scale_space_set_parallel(self, start_level_value=3):
         """
         Считаем множество Якоби параллельно.
         Вычисляем только рёбра видов Zz, Xp, Xm, Yp, Ym,
@@ -269,9 +299,21 @@ class ScaleSpaceMesh3D:
 
         Пока распараллеливание даёт выигрыш в 2 - 2.5 раза.
         Надо улучшать, попробовать параллелить не по типу рёбер на большее число потоков.
-        :param start_level: Уровень, с которого начинаем вычисления.
+        :param start_level_value: Уровень, с которого начинаем вычисления.
         :return: в поле jacobi_set записывается множество Якоби.
         """
+
+        # Переводим start_level в индекс.
+        # Начинаем считать с места, где уровень выше указанного в start_level_value
+        self.start_level = self.sizeZ
+        for level in range(1, self.sizeZ):
+            if self.levels[level] > start_level_value:
+                self.start_level = level
+                break
+
+        self.start_level_value = self.levels[self.start_level]
+        print("Actual start level = {0}".format(self.start_level_value))
+        print("Start level index = {0}".format(self.start_level))
 
         self.jacobi_set = dict()
         for edge_type in ScaleSpaceMesh3D.EDGE_TYPES:
@@ -287,7 +329,7 @@ class ScaleSpaceMesh3D:
             result = []
             for i in range(1, self.sizeX - 1):
                 for j in range(1, self.sizeY - 1):
-                    for k in range(start_level, self.sizeZ - 1):
+                    for k in range(self.start_level, self.sizeZ - 1):
                         if self._get_edge_criticality(i, j, k, e_type) > 0:
                             result.append([(i, j, k), self._get_edge_end(i, j, k, e_type)])
             self.jacobi_set[e_type] = result
@@ -301,7 +343,7 @@ class ScaleSpaceMesh3D:
             result = []
             for i in range(1, self.sizeX - 1):
                 for j in range(1, self.sizeY - 1):
-                    for k in range(start_level, self.sizeZ - 1):
+                    for k in range(self.start_level, self.sizeZ - 1):
                         # Диагональные рёбра выходят только из чёрных вершин.
                         if (i + j + k) % 2 == 1:
                             if self._get_edge_criticality(i, j, k, e_type) > 0:
@@ -362,7 +404,6 @@ class ScaleSpaceMesh3D:
 
 
 if __name__ == '__main__':
-# if False:
     import argparse
     import networkx as nx
     import scipy.interpolate as sip
@@ -379,28 +420,30 @@ if __name__ == '__main__':
     parser.add_argument('--input', metavar='i', type=str, help='input FITS file')
     parser.add_argument('--output', metavar='o', type=str, help='output PNG file')
     parser.add_argument('--levels', metavar='l', type=int, default=50, help='number of levels', required=False)
-    parser.add_argument('--start_level', type=int, default=6, help='start level', required=False)
+    parser.add_argument('--start_level_value', type=int, default=3, help='start level', required=False)
     parser.add_argument('--parallel', metavar='p', type=int, default=True, help='parallel computation', required=False)
     parser.add_argument('--morse', metavar='p', type=int, default=True, help='draw Morse graph', required=False)
     args = parser.parse_args()
 
     image = gen.gen_field_from_file(args.input, conditions='plain', filetype='fits')
-    # image = image[100:300, 100:300]
+    # image = image[100:200, 100:200]
 
-    start_level = args.start_level
+    print("Start level = {0}".format(args.start_level_value))
 
-    j = ScaleSpaceMesh3D(image, level_num=args.levels)
-
-    # Строим комплекс Морса для некоторого уровня
-    mesh = TorusMesh.build_all(j.f[:, :, start_level])
-    mesh.simplify_by_level(0.01)
+    j = ScaleSpaceMesh3D(image, max_level=100.0, level_num=args.levels, level_scale='log')
+    print('Scale space mesh created.')
 
     if args.parallel:
         print('Parallel computation started...')
-        j.calc_scale_space_set_parallel(start_level=start_level)
+        j.calc_scale_space_set_parallel(start_level_value=args.start_level_value)
     else:
         print('Computation started...')
-        j.calc_scale_space_set(start_level=start_level)
+        j.calc_scale_space_set(start_level_value=args.start_level_value)
+
+    # Строим комплекс Морса для некоторого уровня
+    level_field = gen.perturb(j.f[:, :, j.start_level])
+    mesh = TorusMesh.build_all(level_field)
+    mesh.simplify_by_level(0.01)
 
     print("Jacobi graph constructing...")
     edges, nodes = [], []
@@ -444,10 +487,16 @@ if __name__ == '__main__':
         straight_paths.append(p_straight)
 
     print("Number of straight paths: {0}".format(len(straight_paths)))
+
     print("Redirecting paths...")
     for i in range(len(straight_paths)):
         if straight_paths[i][0][2] > straight_paths[i][-1][2]:
             straight_paths[i].reverse()
+
+    print("Remove trash paths...")
+    # Все пути начинаются либо заканчиваются внизу.
+    straight_paths = [p for p in straight_paths if p[0][2] == j.start_level or p[0][2] == j.start_level - 1]
+    print(j.start_level)
 
     sizeX, sizeY = image.shape[:2]
 
@@ -455,13 +504,17 @@ if __name__ == '__main__':
         top_point = path[-1]
         return (top_point[0] == 0) or (top_point[0] == 0) or (top_point[0] == sizeX - 1) or (
                     top_point[0] == sizeX - 2) or \
-               (top_point[1] == 0) or (top_point[1] == 1) or (top_point[1] == sizeY - 1) or (top_point[1] == sizeY - 2)
+               (top_point[1] == 0) or (top_point[1] == 1) or (top_point[1] == sizeY - 1) or (
+                       top_point[1] == sizeY - 2)
 
-    print("Remove paths leading into boundary")
-    normal_paths = [p for p in straight_paths if not is_path_border(p)]
-
+    # print("Remove paths leading into boundary")
+    # normal_paths = [p for p in straight_paths if not is_path_border(p)]
+    normal_paths = straight_paths
     print("Number of correct paths: {0}".format(len(normal_paths)))
-    long_normal_paths = [n for n in normal_paths if len(n) > 3]
+
+    min_path_height = 20  # Нас интересуют пути, доходящие до какого-то уровня
+
+    long_normal_paths = [n for n in normal_paths if np.transpose(n)[2].max() >= min_path_height]
     print("Number of long paths: {0}".format(len(long_normal_paths)))
 
     def path_top_point(path):
@@ -471,13 +524,14 @@ if __name__ == '__main__':
         """
         p = np.array(path, dtype=np.int)
         idx = np.where(p[:, 2] == p[:, 2].max())[0].mean(dtype=np.int)
-        return path[idx]
+        return path[idx][0], path[idx][1], j.levels[path[idx][2]]
 
-    def draw_smoothed_path(ax, p, radius=1, color=(1, 0, 0), draw_source=False):
+    def draw_smoothed_path(ax, pth, radius=1, color=(1, 0, 0), draw_source=False):
+        x, y, z = np.transpose(pth)
         if draw_source:
-            x, y, z = np.transpose(p)
             vv.plot(x, y, z, '--r', axes=ax)
-        tck, u = sip.splprep(np.transpose(p), k=3)
+        z_converted = list(map(j.levels.__getitem__, z))  # Переводим координату в уровень
+        tck, u = sip.splprep([x, y, z_converted], k=3)
         new_p = sip.splev(np.linspace(0, 1, 200), tck)
 
         pp = Pointset(3)
@@ -491,13 +545,12 @@ if __name__ == '__main__':
     def draw_top_points(ax, paths, color=(1, 1, 0)):
         top_pts = np.array([path_top_point(p) for p in paths])
         pp = Pointset(top_pts)
-        vv.plot(pp, ms='.', mc=color, mw='10', ls='', mew=0, axes=ax)
+        vv.plot(pp, ms='.', mc=color, mw='15', ls='', mew=0, axes=ax)
 
-    def plot_bg_image(imgdata, level):
+    def plot_bg_image(imgdata, z):
         nr, nc = imgdata.shape[:2]
         x, y = np.mgrid[:nr, :nc]
-        z = np.ones((nr, nc))
-        vv.functions.surf(x, y, z * level, imgdata, aa=3)
+        vv.functions.surf(x, y, z * np.ones((nr, nc)), imgdata, aa=3)
 
     def draw_critical_points(ax, morse_index, level, color):
         Y, X = mesh.get_critical_points(morse_index)
@@ -505,34 +558,35 @@ if __name__ == '__main__':
         pp = Pointset(np.transpose([X, Y, Z]))
         vv.plot(pp, ms='.', mc=color, mw='12', ls='', mew=0, axes=ax)
 
-    def draw_arcs(ax, color=(1, 1, 0)):
+    def draw_arcs(ax, level, color=(1, 1, 0)):
         arcs = mesh.get_arcs()
         for arc in arcs:
             Y, X = np.transpose(arc)
-            Z = np.ones(len(X)) * (start_level + 0.1)
+            Z = np.ones(len(X)) * level
             pp = Pointset(np.transpose([X, Y, Z]))
             vv.plot(pp, lw=1, lc=color, alpha=0.5, ls='-', mew=0, axes=ax)
 
     # Рисуем картинки
-    z_multiplier = 4  # Увеличиваем масштаб по Z
-    plot_bg_image(image, level=start_level)
+    plot_bg_image(image, z=j.start_level_value)
     ax = vv.gca()
-    ax.bgcolor = (0.7, 0.7, 0.7)
+    ax.bgcolor = (0.7, 0.7, 0.7)  # We draw path in white by default, so we need a dark background.
     ax.light0.position = (200, 200, 200, 0)
-    draw_arcs(ax, color=(0.5, 0.5, 0))
+    # draw_arcs(ax, j.start_level_value * 1.01, color=(0.5, 0.5, 0.5))
     for path in long_normal_paths:
         if len(path) <= 3:
             # Для кубического сплайна нужно 4 точки.
             continue
         draw_smoothed_path(ax, path, radius=2, color=(1, 1, 1))
-    draw_critical_points(ax, 2, level=(start_level + 0.1), color=(1, 0, 0))
-    draw_critical_points(ax, 1, level=(start_level + 0.1), color=(0, 0.5, 0))
-    draw_critical_points(ax, 0, level=(start_level + 0.1), color=(0, 0, 1))
-    draw_top_points(ax, long_normal_paths)
+    # draw_critical_points(ax, 2, level=(j.start_level_value * 1.01), color=(1, 1, 1))
+    # draw_critical_points(ax, 1, level=(j.start_level_value * 1.01), color=(1, 1, 1))
+    # draw_critical_points(ax, 0, level=(j.start_level_value * 1.01), color=(1, 1, 1))
+    # draw_top_points(ax, long_normal_paths, color=(1, 1, 1))
 
-    ax.camera.azimuth = 0.
-    ax.camera.elevation = 90.
-    ax.camera.daspect = (1, 1, z_multiplier)
+    # ax.camera.azimuth = 0.
+    # ax.camera.elevation = 90.
+    ax.camera.azimuth = 45.
+    ax.camera.elevation = 30.
+    ax.camera.daspect = (1, 1, 4)  # Увеличиваем масштаб по Z
     vv.gcf().relativeFontSize = 2.0
 
     # import time

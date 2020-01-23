@@ -7,6 +7,7 @@ import heapq
 from bitarray import bitarray
 from collections import deque
 import networkx as nx
+import threading
 
 import morse.unionfind
 import copy
@@ -428,7 +429,7 @@ class TorusMesh:
         if log:
             print('Computation of discrete gradient field...', end='')
 
-        def process_star(idx):
+        def _process_star(idx):
             # Two additional heaps
             pq_zero = []
             pq_one = []
@@ -471,9 +472,28 @@ class TorusMesh:
                             if (gamma[1] in self._facets(a)) and (len(self.unpaired_facets(a, lstar)) == 1):
                                 heapq.heappush(pq_one, (self._extvalue(a), a))
 
-        from multiprocessing.dummy import Pool as ThreadPool
-        pool = ThreadPool(threads_num)
-        pool.map(process_star, range(self.size))
+        def _process_stars_parallel(cell_list):
+            for cell in cell_list:
+                _process_star(cell)
+
+        cell_num_in_thread = self.size // threads_num
+        cell_blocks = [[cell_num_in_thread * i, cell_num_in_thread * (i + 1)] for i in range(threads_num)]
+        cell_blocks[-1][1] = self.size
+        threads = []
+
+        print(cell_blocks)
+
+        for i in range(threads_num):
+            my_thread = threading.Thread(target=_process_stars_parallel,
+                                         args=(list(range(cell_blocks[i][0], cell_blocks[i][1])),))
+            threads.append(my_thread)
+
+        for thr in threads:
+            thr.start()
+
+        # Method should finish after all threads are finished.
+        for thr in threads:
+            thr.join()
 
         # Сортируем клетки по возрастанию значения — получаем фильтрацию.
         self.cr_cells.sort(key=lambda idx: self._extvalue(idx))
@@ -941,6 +961,37 @@ class TorusMesh:
         plt.ylim(0, max(death_times))
         return birth_times, death_times
 
+    def get_critical_points(self, morse_index):
+        """
+        Get coordinates of critical points by Morse index.
+        :param morse_index: Morse index of critical points.
+        :return: tuple (X, Y) of X and Y point coordinates.
+        """
+        points_idx = self.cp(morse_index)
+        return [self.coords(p)[0] for p in points_idx], [self.coords(p)[1] for p in points_idx]
+
+    def get_arcs(self, cut=None):
+        """
+        Get coordinates of arcs of MS-complex.
+        :param cut: Cut arcs passing through border of rectangle; pass here rectangle cut=(x0, y0, x1, y1).
+        :return: tuple (X, Y) of X and Y point coordinates.
+        """
+        arcs = []
+        for arc in self.list_arcs():
+            new_arc = []
+            if (cut is None) or self.is_arc_inner(arc, *cut):  # Отбрасываем граничные дуги
+                for idx in range(len(arc) - 1):
+                    edge = [self.coords(arc[idx]), self.coords(arc[idx + 1])]
+                    if np.abs(edge[0][0] - edge[1][0]) < 1 and np.abs(edge[0][1] - edge[1][1]) < 1:
+                        new_arc.append(edge[0])
+                    else:
+                        if len(new_arc) > 1:
+                            arcs.append(new_arc)
+                        new_arc = []
+                if len(new_arc) > 1:
+                    arcs.append(new_arc)
+        return arcs
+
     def print(self):
         print(self.values)
 
@@ -951,19 +1002,15 @@ class TorusMesh:
         ax.plot_surface(x, y, self.values, cmap=cm.gray, linewidth=0, antialiased=True)
 
     def draw(self,
-             draw_crit_pts=True,
-             annotate_crit_points=False,
-             annotate_values=False,
-             draw_persistence_pairs=False,
-             draw_gradient=False,
-             draw_arcs=True,
-             draw_graph=False,
-             draw_image=True,
-             fname=None,
-             cut=None,
-             cmap='gray'):
+             draw_crit_pts=True, annotate_crit_points=False, annotate_values=False,
+             draw_persistence_pairs=False, draw_gradient=False, draw_arcs=True,
+             draw_graph=False, draw_image=True, fname=None, cut=None,
+             cmap='gray', max_color=(1, 0, 0), min_color=(0, 0, 1), saddle_color=(0, 1, 0)):
         """
         Draw mesh values.
+        :param saddle_color: Color of saddle points.
+        :param max_color: Color of maxima points.
+        :param min_color: Color of minima points.
         :param cmap:
             Color map for image drawing.
         :param annotate_values:
@@ -1033,9 +1080,12 @@ class TorusMesh:
             lc = mc.LineCollection(edges, colors='k', linewidths=1, zorder=1)
             plt.gca().add_collection(lc)
         if draw_crit_pts:
-            plt.scatter([self.coords(p)[0] for p in self.cp(0)], [self.coords(p)[1] for p in self.cp(0)], zorder=2, c='b', s=50)
-            plt.scatter([self.coords(p)[0] for p in self.cp(1)], [self.coords(p)[1] for p in self.cp(1)], zorder=2, c='g', s=50)
-            plt.scatter([self.coords(p)[0] for p in self.cp(2)], [self.coords(p)[1] for p in self.cp(2)], zorder=2, c='r', s=50)
+            plt.scatter([self.coords(p)[0] for p in self.cp(0)],
+                        [self.coords(p)[1] for p in self.cp(0)], zorder=2, c=min_color, edgecolors='k', s=50)
+            plt.scatter([self.coords(p)[0] for p in self.cp(1)],
+                        [self.coords(p)[1] for p in self.cp(1)], zorder=2, c=saddle_color, edgecolors='k', s=50)
+            plt.scatter([self.coords(p)[0] for p in self.cp(2)],
+                        [self.coords(p)[1] for p in self.cp(2)], zorder=2, c=max_color, edgecolors='k', s=50)
         if annotate_crit_points:
             for cidx in self.cr_cells:
                 plt.text(self.coords(cidx)[0], self.coords(cidx)[1], str(cidx))
@@ -1070,16 +1120,17 @@ class TorusMesh:
         return g
 
     @classmethod
-    def build_all(cls, field, log=False):
+    def build_all(cls, field, threads_num=8, log=False):
         """
         Построить комплекс Морса-Смейла одной функцией.
+        :param threads_num: Количество потоков.
         :param log:
         :param field:
         :return:
         """
         mesh = TorusMesh(*field.shape)
         mesh.set_values(field)
-        mesh.cmp_discrete_gradient(log=log)
+        mesh.cmp_discrete_gradient(threads_num=threads_num, log=log)
         mesh.cmp_msgraph()
         mesh.cmp_arcs()
         mesh.cmp_persistent_pairs(log=log)
@@ -1105,52 +1156,29 @@ def test():
 
 
 def test2():
+    import matplotlib
+    matplotlib.use('Qt5Agg')
     import morse.field_generator
-    i = 11
-
-    # data = morse.field_generator.gen_field_from_file('D:/YandexDisk/fits/data/processed/AR12003/10.fits',
-    #                                                  filetype='fits',
-    #                                                  conditions='torus')
-    data = morse.field_generator.gen_field_from_file('D:/example.bmp',
-                                                     filetype='bmp',
-                                                     conditions='torus')
-    m = TorusMesh(data.shape[0], data.shape[1])
-    m.set_values(data)
-    m.cmp_discrete_gradient()
-    m.cmp_msgraph()
-    m.cmp_arcs()
-    m.cmp_persistent_pairs()
-    # m.simplify_by_level(70, method='arc')
-    m.simplify_by_pairs_remained(20, method='gradient')
-    # nx.draw(m.msgraph)
-    # plt.show()
-    # print(nx.algebraic_connectivity(m.msgraph, method='lanczos'))
-    # m.draw(fname='D:/{0}_init.png'.format(i))  # cut=(0, 0, 400, 400)
-    # print(m.plot_persistence_diagram())
+    import time
+    data = morse.field_generator.gen_field_from_file(r"C:/repo/pproc/data/input.fits",
+                                                     filetype='fits', conditions='plain')
+    start_time = time.time()
+    # data = data[100:300, 100:300]
+    m = TorusMesh.build_all(field=data, threads_num=4)
+    print('Mesh computed in {0}'.format(time.time() - start_time))
+    m.simplify_by_pairs_remained(20)
+    print(m.get_critical_points(0))
     m.draw()
-    plt.show()
-    # print(m.plot_persistence_diagram(betti=0))
-    # plt.show()
-    # print(m.plot_persistence_diagram(betti=1))
-    # plt.show()
 
 
 def test3():
-
     import morse.field_generator
     data = morse.field_generator.gen_gaussian_sum_rectangle(50, 50,
                 [(10, 10), (15, 15), (10, 15), (20, 5)], 5)
     data = morse.field_generator.perturb(data)
     m = TorusMesh.build_all(data)
-    # m.simplify_by_level(70, method='arc')
     m.simplify_by_pairs_remained(20, method='arc')
-    # nx.draw(m.msgraph)
-    # plt.show()
-    # print(nx.algebraic_connectivity(m.msgraph, method='lanczos'))
-    # m.draw(fname='D:/{0}_init.png'.format(i))  # cut=(0, 0, 400, 400)
-    # print(m.plot_persistence_diagram())
     m.draw()
-    plt.show()
 
     # positions = dict(list(zip(nx.nodes(m.msgraph), list(zip(nx.get_node_attributes(m.msgraph, "x").values(),
     #                                                         nx.get_node_attributes(m.msgraph, "y").values())))))
@@ -1165,5 +1193,3 @@ def test3():
     # nx.draw(m.get_cut_morse_graph(), pos=positions, node_color=color_map, node_size=30)
     # plt.show()
 
-
-# test3()
