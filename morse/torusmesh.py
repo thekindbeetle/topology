@@ -1005,7 +1005,8 @@ class TorusMesh:
              draw_crit_pts=True, annotate_crit_points=False, annotate_values=False,
              draw_persistence_pairs=False, draw_gradient=False, draw_arcs=True,
              draw_graph=False, draw_image=True, fname=None, cut=None,
-             cmap='gray', max_color=(1, 0, 0), min_color=(0, 0, 1), saddle_color=(0, 1, 0)):
+             cmap='gray', max_color=(1, 0, 0), min_color=(0, 0, 1), saddle_color=(0, 1, 0),
+             vmin=None, vmax=None):
         """
         Draw mesh values.
         :param saddle_color: Color of saddle points.
@@ -1034,6 +1035,12 @@ class TorusMesh:
         :param cut:
             Tuple (minX, minY, maxX, maxY).
             Cut part of image.
+        :param vmin:
+            Minimal value to draw (for colormap).
+            By default, choose automatically.
+        :param vmax:
+            Maximal value to draw (for colormap).
+            By default, choose automatically.
         """
         plt.figure()
         if cut is None:
@@ -1046,7 +1053,7 @@ class TorusMesh:
         figManager = plt.get_current_fig_manager()
         figManager.window.showMaximized()
         if draw_image:
-            cur_plot = plt.imshow(self.values, cmap=cmap)
+            cur_plot = plt.imshow(self.values, cmap=cmap, vmin=vmin, vmax=vmax)
             plt.colorbar(cur_plot)
         if draw_graph:
             edges = []
